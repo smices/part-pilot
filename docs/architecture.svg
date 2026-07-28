@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700" role="img" aria-labelledby="diagram-title diagram-description">
+  <title id="diagram-title">AI industrial design engineering workflow</title>
+  <desc id="diagram-description">Natural language requirements flow through local Codex or compatible API planning, parametric CAD, OpenCascade validation, exports, FreeCAD, and OrcaSlicer. Computer vision is implemented; CAD memory is a future interface.</desc>
+  <style>
+    text { font-family: 'Helvetica Neue', Helvetica, Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif; fill: #111827; }
+    .title { font-size: 22px; font-weight: 600; }
+    .subtitle { font-size: 13px; fill: #6b7280; }
+    .lane-title { font-size: 12px; font-weight: 600; fill: #6b7280; }
+    .node-title { font-size: 15px; font-weight: 600; }
+    .node-subtitle { font-size: 12px; fill: #6b7280; }
+    .edge-label { font-size: 12px; font-weight: 500; }
+  </style>
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2563eb"/></marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#16a34a"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#9333ea"/></marker>
+  </defs>
+  <rect width="1200" height="700" fill="#ffffff"/>
+  <text x="48" y="42" class="title">AI CAD Industrial Design Workstation</text>
+  <text x="48" y="66" class="subtitle">LLM/Codex -> Engineering Reasoning -> Parametric CAD -> Assembly -> Manufacturing</text>
+  <rect x="40" y="92" width="1120" height="210" rx="12" fill="#f8fafc" stroke="#d1d5db" stroke-dasharray="6,4"/>
+  <text x="58" y="116" class="lane-title">WORKING PROTOTYPE</text>
+  <rect x="40" y="340" width="1120" height="190" rx="12" fill="#faf5ff" stroke="#e9d5ff" stroke-dasharray="6,4"/>
+  <text x="58" y="364" class="lane-title">VISION, REVIEW AND MANUFACTURING</text>
+  <g id="request" data-graph-role="node"><rect x="70" y="155" width="180" height="82" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+    <text x="160" y="186" text-anchor="middle" class="node-title">CLI + Local GUI</text>
+    <text x="160" y="208" text-anchor="middle" class="node-subtitle">Text / hardware photos</text></g>
+  <g id="design-agent" data-graph-role="node"><rect x="300" y="135" width="190" height="122" rx="10" fill="#fff7ed" stroke="#fdba74" stroke-width="1.5"/>
+    <text x="395" y="166" text-anchor="middle" class="node-title">Engineering Agent</text>
+    <text x="395" y="188" text-anchor="middle" class="node-subtitle">Codex · API · schema</text></g>
+  <g id="parametric-cad" data-graph-role="node"><rect x="550" y="135" width="190" height="122" rx="10" fill="#f0fdfa" stroke="#5eead4" stroke-width="1.5"/>
+    <text x="645" y="166" text-anchor="middle" class="node-title">Parametric CAD</text>
+    <text x="645" y="188" text-anchor="middle" class="node-subtitle">CadQuery · build123d</text></g>
+  <g id="validation" data-graph-role="node"><rect x="800" y="135" width="170" height="122" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+    <text x="885" y="166" text-anchor="middle" class="node-title">Geometry + Print</text>
+    <text x="885" y="188" text-anchor="middle" class="node-subtitle">OCP · OCC · Mesh</text></g>
+  <g id="exports" data-graph-role="node"><rect x="1030" y="155" width="130" height="82" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+    <text x="1095" y="186" text-anchor="middle" class="node-title">Manufacturing</text>
+    <text x="1095" y="208" text-anchor="middle" class="node-subtitle">STEP · STL</text></g>
+  <g id="vision" data-graph-role="node"><rect x="80" y="405" width="180" height="82" rx="10" fill="#faf5ff" stroke="#c4b5fd" stroke-width="1.5"/>
+    <text x="170" y="436" text-anchor="middle" class="node-title">Computer Vision</text>
+    <text x="170" y="458" text-anchor="middle" class="node-subtitle">Hardware recognition</text></g>
+  <g id="memory" data-graph-role="node"><rect x="330" y="405" width="180" height="82" rx="10" fill="#ffffff" stroke="#c4b5fd" stroke-width="1.5" stroke-dasharray="7,4"/>
+    <text x="420" y="436" text-anchor="middle" class="node-title">CAD Memory</text>
+    <text x="420" y="458" text-anchor="middle" class="node-subtitle">Design preferences (future)</text></g>
+  <g id="freecad" data-graph-role="node"><rect x="720" y="405" width="170" height="82" rx="10" fill="#eff6ff" stroke="#93c5fd" stroke-width="1.5"/>
+    <text x="805" y="436" text-anchor="middle" class="node-title">FreeCAD</text>
+    <text x="805" y="458" text-anchor="middle" class="node-subtitle">Review / edit / assemble</text></g>
+  <g id="orcaslicer" data-graph-role="node"><rect x="970" y="405" width="170" height="82" rx="10" fill="#f0fdf4" stroke="#86efac" stroke-width="1.5"/>
+    <text x="1055" y="436" text-anchor="middle" class="node-title">OrcaSlicer</text>
+    <text x="1055" y="458" text-anchor="middle" class="node-subtitle">Slice / G-code</text></g>
+  <path id="e1" data-graph-role="edge" d="M 250 196 H 300" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="275" y="185" text-anchor="middle" class="edge-label" fill="#2563eb">Brief</text>
+  <path id="e2" data-graph-role="edge" d="M 490 196 H 550" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="520" y="185" text-anchor="middle" class="edge-label" fill="#2563eb">Part plan</text>
+  <path id="e3" data-graph-role="edge" d="M 740 196 H 800" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="770" y="185" text-anchor="middle" class="edge-label" fill="#16a34a">B-Rep</text>
+  <path id="e4" data-graph-role="edge" d="M 970 196 H 1030" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="1000" y="185" text-anchor="middle" class="edge-label" fill="#16a34a">Valid</text>
+  <path id="e5" data-graph-role="edge" d="M 1085 237 V 320 H 805 V 405" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+  <text x="946" y="309" text-anchor="middle" class="edge-label" fill="#2563eb">STEP</text>
+  <path id="e6" data-graph-role="edge" d="M 1105 237 V 405" fill="none" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+  <text x="1125" y="330" text-anchor="middle" class="edge-label" fill="#16a34a">STL</text>
+  <path id="e7" data-graph-role="edge" d="M 260 446 H 275 V 278 H 350 V 257" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+  <text x="315" y="293" text-anchor="middle" class="edge-label" fill="#9333ea">Detected parts</text>
+  <path id="e8" data-graph-role="edge" d="M 420 405 V 286 H 410 V 257" fill="none" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)" stroke-dasharray="6,4"/>
+  <text x="458" y="324" text-anchor="middle" class="edge-label" fill="#9333ea">Preferences</text>
+  <g transform="translate(70,592)">
+    <text x="0" y="-18" class="lane-title">LEGEND</text>
+    <line x1="0" y1="0" x2="42" y2="0" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)"/>
+    <text x="55" y="4" class="subtitle">Engineering flow</text>
+    <line x1="190" y1="0" x2="232" y2="0" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)"/>
+    <text x="245" y="4" class="subtitle">Validation / output</text>
+    <line x1="380" y1="0" x2="422" y2="0" stroke="#9333ea" stroke-width="2" marker-end="url(#arrow-purple)"/>
+    <text x="435" y="4" class="subtitle">Vision / optional input</text>
+  </g>
+  <text x="1135" y="670" text-anchor="end" class="subtitle">Implementation: ai_cad_designer v0.2</text>
+</svg>

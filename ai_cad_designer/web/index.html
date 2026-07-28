@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Forge · AI CAD Designer</title>
+  <link rel="stylesheet" href="/style.css?v=62-pod-arches">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="Forge 首页">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span><b>FORGE</b><small>AI CAD DESIGNER</small></span>
+    </a>
+    <div class="system-state">
+      <span id="statusDot" class="status-dot pending"></span>
+      <span id="statusText">正在检查本地 Codex</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div>
+        <p class="eyebrow">PARAMETRIC INDUSTRIAL DESIGN / 01</p>
+        <h1>从硬件照片到<br><em>可制造的 CAD</em></h1>
+        <p class="lede">识别真实组件，形成工程提案，生成参数化装配，并输出经过 OpenCascade 与 FDM 检查的 STEP / STL。</p>
+      </div>
+      <div class="hero-visual" aria-hidden="true">
+        <div class="grid-plane"></div>
+        <div class="cad-object">
+          <span class="face top"></span>
+          <span class="face left"></span>
+          <span class="face right"></span>
+          <span class="cad-hole"></span>
+        </div>
+        <span class="measure measure-x">105.0 mm</span>
+        <span class="measure measure-y">78.0 mm</span>
+      </div>
+    </section>
+
+    <section class="workspace">
+      <article class="control-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="step">01 / 输入</p>
+            <h2>设计任务</h2>
+          </div>
+          <div class="heading-actions">
+            <button id="loadDemo" type="button">载入 SMART FAN DEMO</button>
+            <span class="local-badge">LOCAL FIRST</span>
+          </div>
+        </div>
+
+        <nav class="wizard-steps" aria-label="设计工作流">
+          <button type="button" class="active" data-step="1"><b>01</b><span>定义任务</span></button>
+          <button type="button" data-step="2"><b>02</b><span>识别资料</span></button>
+          <button type="button" data-step="3"><b>03</b><span>确认尺寸</span></button>
+          <button type="button" data-step="4"><b>04</b><span>生成验证</span></button>
+        </nav>
+
+        <label for="request">第一步 · 描述产品与内部组件</label>
+        <textarea id="request" rows="7">我有 ESP32、18650电池、摄像头、风扇。
+设计一个桌面机器人外壳。
+要求：不用螺丝、可拆卸、3D打印、PETG材料。</textarea>
+
+        <div class="settings">
+          <div>
+            <label for="planner">推理引擎</label>
+            <select id="planner">
+              <option value="codex">本地 Codex</option>
+              <option value="api">兼容 API</option>
+              <option value="rules">确定性规则</option>
+            </select>
+          </div>
+          <div>
+            <label for="model">模型覆盖 <span>可选</span></label>
+            <input id="model" type="text" placeholder="使用默认模型">
+          </div>
+        </div>
+
+        <div class="upload-head">
+          <div>
+            <label>第二步 · 上传硬件资料</label>
+            <p>实物照片、原理图、PCB 图或 PDF</p>
+          </div>
+          <span id="imageCount">0 / 6</span>
+        </div>
+        <label class="source-kind-label" for="sourceKind">资料类型</label>
+        <select id="sourceKind">
+          <option value="auto">自动判断</option>
+          <option value="photo">硬件照片</option>
+          <option value="schematic">原理图 / PCB 图</option>
+          <option value="mixed">混合资料</option>
+        </select>
+        <button id="dropzone" class="dropzone" type="button">
+          <span class="scan-icon" aria-hidden="true"></span>
+          <b>拖入照片、原理图或点击选择</b>
+          <small>PNG、JPEG、WebP、PDF · 单个最大 20MB</small>
+        </button>
+        <input id="fileInput" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" multiple hidden>
+        <div id="previews" class="previews" aria-live="polite"></div>
+
+        <fieldset class="engineering-fields">
+          <legend>第三步 · 自动分析并确认制造约束</legend>
+          <div class="profile-actions">
+            <button id="analyzeConstraints" type="button">自动分析制造约束</button>
+            <span id="constraintStatus">等待资料分析；也可以直接手工填写</span>
+          </div>
+          <div class="constraint-grid">
+            <label>材料
+              <select id="material" data-manufacturing-parameter="material"
+                data-source="default_reference">
+                <option>PETG</option><option>PLA</option><option>ABS</option><option>ASA</option>
+              </select>
+            </label>
+            <label>装配公差 (mm)
+              <input id="tolerance" type="number" min="0.1" max="1" step="0.05" value="0.25"
+                data-manufacturing-parameter="tolerance_mm" data-source="default_reference">
+            </label>
+            <label>壁厚 (mm)
+              <input id="wallThickness" type="number" min="1.2" max="8" step="0.1" value="2.5"
+                data-manufacturing-parameter="wall_thickness_mm" data-source="default_reference">
+            </label>
+            <label>层高 (mm)
+              <input id="layerHeight" type="number" min="0.08" max="0.4" step="0.04" value="0.2"
+                data-manufacturing-parameter="layer_height_mm" data-source="default_reference">
+            </label>
+          </div>
+          <p class="field-subheading">Smart Fan 热流假设 · 可用风扇数据表覆盖</p>
+          <div class="constraint-grid thermal-assumptions">
+            <label>自由风量 (CFM)
+              <input id="fanAirflow" type="number" min="1" max="250" step="0.1" value="45">
+            </label>
+            <label>最大静压 (Pa)
+              <input id="fanStaticPressure" type="number" min="1" max="500" step="0.1" value="12">
+            </label>
+            <label>热负载 (W)
+              <input id="thermalLoad" type="number" min="1" max="500" step="1" value="65">
+            </label>
+            <label>允许空气温升 (°C)
+              <input id="allowedAirRise" type="number" min="1" max="30" step="0.5" value="8">
+            </label>
+          </div>
+          <p class="field-subheading">Mac mini / 风扇关键实测尺寸 · 数值直接驱动 CAD</p>
+          <div class="constraint-grid engineering-parameter-grid">
+            <label>Mac 圆角半径 (mm)
+              <input type="number" min="7" max="12" step="0.1" value="9"
+                data-engineering-parameter="mac_corner_radius_mm" data-source="default_reference">
+            </label>
+            <label>底脚外径 (mm)
+              <input type="number" min="96" max="101" step="0.1" value="100"
+                data-engineering-parameter="mac_foot_outer_diameter_mm" data-source="default_reference">
+            </label>
+            <label>底脚高度 (mm)
+              <input type="number" min="1" max="3" step="0.1" value="2"
+                data-engineering-parameter="mac_foot_height_mm" data-source="default_reference">
+            </label>
+            <label>Mac 设计质量 (kg)
+              <input type="number" min="0.5" max="2" step="0.05" value="1"
+                data-engineering-parameter="mac_design_mass_kg" data-unit="kg"
+                data-source="default_reference">
+            </label>
+            <label>电源键 X (mm)
+              <input type="number" min="-53" max="-45" step="0.1" value="-49"
+                data-engineering-parameter="power_button_x_mm" data-source="default_reference">
+            </label>
+            <label>电源键 Y (mm)
+              <input type="number" min="45" max="53" step="0.1" value="49"
+                data-engineering-parameter="power_button_y_mm" data-source="default_reference">
+            </label>
+            <label>电源键直径 (mm)
+              <input type="number" min="6" max="10" step="0.1" value="8"
+                data-engineering-parameter="power_button_diameter_mm" data-source="default_reference">
+            </label>
+            <label>前面 I/O 整组 X 偏移 (mm)
+              <input type="number" min="-5" max="5" step="0.1" value="0"
+                data-engineering-parameter="front_interface_delta_x_mm"
+                data-source="default_reference">
+            </label>
+            <label>前面 I/O 整组 Z 偏移 (mm)
+              <input type="number" min="-5" max="5" step="0.1" value="0"
+                data-engineering-parameter="front_interface_delta_z_mm"
+                data-source="default_reference">
+            </label>
+            <label>后面 I/O 整组 X 偏移 (mm)
+              <input type="number" min="-5" max="5" step="0.1" value="0"
+                data-engineering-parameter="rear_interface_delta_x_mm"
+                data-source="default_reference">
+            </label>
+            <label>后面 I/O 整组 Z 偏移 (mm)
+              <input type="number" min="-5" max="5" step="0.1" value="0"
+                data-engineering-parameter="rear_interface_delta_z_mm"
+                data-source="default_reference">
+            </label>
+            <label>风扇厚度 (mm)
+              <input id="fanThickness" type="number" min="20" max="27" step="0.1" value="25"
+                data-engineering-parameter="fan_thickness_mm" data-source="default_reference">
+            </label>
+            <label>风扇孔距 (mm)
+              <input type="number" min="104" max="106" step="0.1" value="105"
+                data-engineering-parameter="fan_mount_spacing_mm" data-source="default_reference">
+            </label>
+            <label>安装孔径 (mm)
+              <input type="number" min="4" max="5.2" step="0.1" value="4.6"
+                data-engineering-parameter="fan_mount_hole_diameter_mm" data-source="default_reference">
+            </label>
+            <label>DS18B20 探头直径 (mm)
+              <input type="number" min="5.5" max="6.5" step="0.05" value="6"
+                data-engineering-parameter="ds18b20_probe_diameter_mm" data-source="default_reference">
+            </label>
+            <label>探头卡扣单边干涉 (mm)
+              <input type="number" min="0.02" max="0.25" step="0.01" value="0.1"
+                data-engineering-parameter="ds18b20_snap_interference_per_side_mm"
+                data-source="default_reference">
+            </label>
+          </div>
+          <div class="check-row">
+            <label><input id="screwless" type="checkbox" checked> 不用螺丝</label>
+            <label><input id="removable" type="checkbox" checked> 可拆卸维护</label>
+            <label><input id="minimalSupports" type="checkbox" checked> 最少支撑</label>
+            <label><input id="sliceManufacturing" type="checkbox"> OrcaSlicer 实际切片</label>
+          </div>
+          <div class="profile-actions">
+            <button id="saveProfile" type="button">保存为本机 CAD 记忆</button>
+            <button id="loadProfile" type="button">恢复本机 CAD 记忆</button>
+            <span id="profileStatus">尚未保存</span>
+          </div>
+          <p class="field-help">识别资料后系统会根据需求、硬件清单和可用模型自动分析材料、公差、壁厚与层高并载入；每个值仍可直接手工修改。无法分析时保留参考值并提示手工确认。原理图不能提供可靠机械尺寸时，请填写实测值。镂空会同时检查跨桥、支撑包络、支撑耗材和打印时间。</p>
+        </fieldset>
+
+        <div class="actions">
+          <button id="visionButton" class="secondary" type="button" disabled>
+            <span>识别资料</span><small>照片 / 原理图 / PDF</small>
+          </button>
+          <button id="designButton" class="primary" type="button">
+            <span>生成 CAD</span><small>推理 · 装配 · 验证 · 导出</small>
+          </button>
+        </div>
+        <p id="errorBox" class="error-box" role="alert" hidden></p>
+      </article>
+
+      <section class="results-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="step">02 / 输出</p>
+            <h2>工程结果</h2>
+          </div>
+          <span id="runState" class="run-state idle">等待任务</span>
+        </div>
+
+        <div id="emptyState" class="empty-state">
+          <div class="empty-wireframe" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <h3>准备生成第一套设计</h3>
+          <p>你可以只输入文字，也可以上传硬件照片、原理图或 PDF。系统会先让你确认组件尺寸，再把结果用于参数化 CAD。</p>
+        </div>
+
+        <div id="progressState" class="progress-state" hidden>
+          <div class="loader"><span></span></div>
+          <h3 id="progressTitle">正在分析硬件</h3>
+          <ol id="progressSteps">
+            <li class="active">Computer Vision</li>
+            <li>Engineering Reasoning</li>
+            <li>Parametric CAD</li>
+            <li>Printability</li>
+          </ol>
+          <p>本地 Codex 推理和 OpenCascade 布尔运算可能需要数分钟。</p>
+        </div>
+
+        <div id="resultState" hidden>
+          <section id="visionSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>CV</span><h3>资料识别与尺寸确认</h3></div>
+              <b id="visionCount"></b>
+            </div>
+            <div id="componentCards" class="component-grid" tabindex="0"
+              aria-label="识别到的组件列表，可上下滚动"></div>
+            <div id="confirmations" class="notice" hidden></div>
+          </section>
+
+          <section id="proposalSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>CAD</span><h3>设计提案</h3></div>
+              <b id="plannerLabel"></b>
+            </div>
+            <div id="metrics" class="metrics"></div>
+            <div id="partsList" class="parts-list"></div>
+          </section>
+
+          <section id="bomSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>BOM</span><h3>硬件尺寸与装配一致性</h3></div>
+              <b id="bomSummary"></b>
+            </div>
+            <div id="bomPolicy" class="notice airflow-note"></div>
+            <div id="bomList" class="validation-list"></div>
+          </section>
+
+          <section id="previewSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>3D</span><h3>几何预览</h3></div>
+              <b>拖动旋转 · 滚轮缩放</b>
+            </div>
+            <div class="model-viewer">
+              <canvas id="modelCanvas" aria-label="生成零件的交互式三维预览"></canvas>
+              <div class="viewer-overlay">
+                <span id="modelStats">正在加载网格</span>
+                <div class="view-presets" aria-label="工程视角">
+                  <button id="resetView" type="button">等轴</button>
+                  <button id="topView" type="button">顶面</button>
+                  <button id="bottomView" type="button">底面</button>
+                  <button id="frontView" type="button">前面</button>
+                  <button id="rearView" type="button">后面</button>
+                  <button id="leftView" type="button">左面</button>
+                  <button id="rightView" type="button">右面</button>
+                </div>
+              </div>
+              <div class="dimension-hud" aria-label="当前预览的三轴包络尺寸">
+                <span class="axis-x">X / 长 <b id="dimensionX">—</b></span>
+                <span class="axis-y">Y / 宽 <b id="dimensionY">—</b></span>
+                <span class="axis-z">Z / 高 <b id="dimensionZ">—</b></span>
+              </div>
+              <div id="modelError" class="viewer-error" hidden></div>
+            </div>
+            <div id="modelTabs" class="model-tabs" tabindex="0"
+              aria-label="选择预览场景，可左右滚动"></div>
+            <section id="assemblyInspector" class="assembly-inspector" hidden
+              aria-label="当前装配的零件尺寸与位置">
+              <header>
+                <div>
+                  <span>ASSEMBLY BOM</span>
+                  <h4 id="inspectorTitle">装配尺寸检查器</h4>
+                </div>
+                <div class="inspector-actions">
+                  <span id="inspectorSummary"></span>
+                  <button id="showAllItems" type="button">全部显示</button>
+                </div>
+              </header>
+              <ol id="serviceSequence" class="service-sequence" hidden></ol>
+              <div class="inspector-columns" aria-hidden="true">
+                <span>显示 / 零件</span>
+                <span>外包络 L × W × H</span>
+                <span>装配位置 X / Y / Z</span>
+                <span>检查</span>
+              </div>
+              <div id="inspectorList" class="inspector-list" tabindex="0"
+                aria-label="当前装配组件列表，可上下滚动"></div>
+            </section>
+          </section>
+
+          <section id="validationSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>QA</span><h3>制造验证</h3></div>
+              <b id="validationSummary"></b>
+            </div>
+            <div id="validationList" class="validation-list"></div>
+          </section>
+
+          <section id="airflowSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>FLOW</span><h3>风道与热能力估算</h3></div>
+              <b id="airflowSummary"></b>
+            </div>
+            <div id="airflowMetrics" class="metrics"></div>
+            <div id="airflowNote" class="notice airflow-note"></div>
+            <div id="airflowChecks" class="validation-list"></div>
+          </section>
+
+          <section id="structureSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>LOAD</span><h3>整机载荷与稳定性</h3></div>
+              <b id="structureSummary"></b>
+            </div>
+            <div id="structureMetrics" class="metrics"></div>
+            <div id="structureNote" class="notice airflow-note"></div>
+            <div id="structureChecks" class="validation-list"></div>
+          </section>
+
+          <section id="manufacturingSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>CAM</span><h3>OrcaSlicer PETG 切片</h3></div>
+              <b id="manufacturingSummary"></b>
+            </div>
+            <div id="manufacturingList" class="validation-list"></div>
+          </section>
+
+          <section id="calibrationSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>FIT</span><h3>低成本配合校准件</h3></div>
+              <b id="calibrationSummary"></b>
+            </div>
+            <div id="calibrationSequence" class="notice"></div>
+            <div id="calibrationList" class="validation-list"></div>
+            <fieldset class="calibration-feedback">
+              <legend>将实体试片结果应用到下一轮</legend>
+              <div class="constraint-grid">
+                <label>PETG 单边间隙 (mm)
+                  <select id="calibratedTolerance">
+                    <option value="0.15">0.15 · 紧</option>
+                    <option value="0.25" selected>0.25 · 标称</option>
+                    <option value="0.35">0.35 · 松</option>
+                  </select>
+                </label>
+                <label>Mac 圆角半径 (mm)
+                  <input id="calibratedCornerRadius" type="number" min="7" max="12" step="0.1" value="9">
+                </label>
+                <label>电源键 X 修正量 (mm)
+                  <input id="buttonDeltaX" type="number" min="-4" max="4" step="0.1" value="0">
+                </label>
+                <label>电源键 Y 修正量 (mm)
+                  <input id="buttonDeltaY" type="number" min="-4" max="4" step="0.1" value="0">
+                </label>
+                <label>前面 I/O X 残差 (mm)
+                  <input id="frontInterfaceDeltaX" type="number" min="-5" max="5" step="0.1" value="0">
+                </label>
+                <label>前面 I/O Z 残差 (mm)
+                  <input id="frontInterfaceDeltaZ" type="number" min="-5" max="5" step="0.1" value="0">
+                </label>
+                <label>后面 I/O X 残差 (mm)
+                  <input id="rearInterfaceDeltaX" type="number" min="-5" max="5" step="0.1" value="0">
+                </label>
+                <label>后面 I/O Z 残差 (mm)
+                  <input id="rearInterfaceDeltaZ" type="number" min="-5" max="5" step="0.1" value="0">
+                </label>
+                <label>实测风扇孔距 (mm)
+                  <input id="calibratedFanSpacing" type="number" min="104" max="106" step="0.1" value="105">
+                </label>
+                <label>实测安装孔径 (mm)
+                  <input id="calibratedFanHole" type="number" min="4" max="5.2" step="0.1" value="4.6">
+                </label>
+                <label>实测 DS18B20 探头直径 (mm)
+                  <input id="calibratedProbeDiameter" type="number" min="5.5" max="6.5" step="0.05" value="6">
+                </label>
+                <label>合适的卡扣单边干涉 (mm)
+                  <input id="calibratedProbeInterference" type="number" min="0.02" max="0.25" step="0.01" value="0.1">
+                </label>
+                <label>主风口拱冠下垂 (mm)
+                  <input id="calibratedMainBridgeSag" type="number" min="0" max="5" step="0.05" placeholder="打印后测量">
+                </label>
+                <label>USB 拱冠下垂 (mm)
+                  <input id="calibratedUsbBridgeSag" type="number" min="0" max="5" step="0.05" placeholder="打印后测量">
+                </label>
+                <label>桥接试片结论
+                  <select id="bridgeCouponResult">
+                    <option value="not_tested" selected>尚未打印</option>
+                    <option value="passed">通过 · 均 ≤ 0.5 mm</option>
+                    <option value="failed">失败 · 需要调参/局部支撑</option>
+                  </select>
+                </label>
+                <label>桥接/支撑备注
+                  <input id="bridgeCouponNotes" type="text" placeholder="拉丝、分层、桥接流量或局部支撑设置">
+                </label>
+              </div>
+              <button id="applyCalibration" class="calibration-apply" type="button">
+                应用校准值并保存到本机
+              </button>
+              <p id="calibrationFeedbackStatus" class="field-help"></p>
+            </fieldset>
+          </section>
+
+          <section id="filesSection" class="result-section" hidden>
+            <div class="section-title">
+              <div><span>↓</span><h3>导出文件</h3></div>
+              <b id="runId"></b>
+            </div>
+            <div id="filesList" class="files-list"></div>
+          </section>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer>
+    <span>LOCALHOST · FILES STAY ON THIS WORKSTATION</span>
+    <span>OpenCascade → STEP / STL → OrcaSlicer</span>
+  </footer>
+  <script src="/viewer.js?v=62-pod-arches" defer></script>
+  <script src="/app.js?v=91-support-aware-opening-ledger-cn" defer></script>
+</body>
+</html>

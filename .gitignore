@@ -1,0 +1,14 @@
+.DS_Store
+.mamba/
+.pytest_cache/
+.venv/
+.codebase-memory/
+.tmp_debug_case*/
+00000.log
+__pycache__/
+*.py[cod]
+*.egg-info/
+ai_cad_designer/exports/*
+!ai_cad_designer/exports/.gitkeep
+ai_cad_designer/models/*
+!ai_cad_designer/models/.gitkeep
