@@ -26,6 +26,7 @@ def test_gui_loads_local_interactive_stl_viewer() -> None:
     assert "application/pdf" in html
     assert 'id="loadDemo"' in html
     assert 'id="sliceManufacturing"' in html
+    assert 'id="blenderPreview"' in html
     assert 'id="manufacturingSection"' in html
     assert 'id="fanAirflow"' in html
     assert 'id="fanStaticPressure"' in html
@@ -76,7 +77,8 @@ def test_gui_loads_local_interactive_stl_viewer() -> None:
     assert "renderAirflow(result.airflow)" in app
     assert "renderCalibration(result.calibration)" in app
     assert "function evidenceLabel(evidence)" in app
-    assert "renderValidation(result.validation, result.evidence, result.planner)" in app
+    assert "result.preview?.visual" in app
+    assert "blender_preview: elements.blenderPreview.checked" in app
     assert "preview?.calibration?.items" in app
     assert "manufacturing_parameters: manufacturingParameters" in app
     assert 'const CAD_PROFILE_KEY = "forge.aiCadProfile.v1"' in app

@@ -272,6 +272,7 @@ class AICADRequestHandler(BaseHTTPRequestHandler):
                     slice_manufacturing=bool(
                         payload.get("slice_manufacturing", False)
                     ),
+                    blender_preview=bool(payload.get("blender_preview", False)),
                     engineering_parameters=engineering_parameters,
                     manufacturing_parameters=manufacturing_parameters,
                 )

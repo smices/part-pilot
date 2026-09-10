@@ -218,7 +218,7 @@ def render_isometric_preview(
     diagnostic_path = preview_dir / DIAGNOSTIC_NAME
     script_path = preview_dir / SCRIPT_NAME
     render_path = preview_dir / RENDER_NAME
-    artifacts = [_relative(root, manifest_path), _relative(root, script_path)]
+    artifacts = [_relative(root, manifest_path)]
 
     try:
         sources = [Path(path).expanduser().resolve() for path in stl_paths]

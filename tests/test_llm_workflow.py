@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from ai_cad_designer import gui_server
 from ai_cad_designer.gui_server import AICADRequestHandler, decode_uploaded_images
 from ai_cad_designer.llm import DesignLLMProvider, OpenAICompatibleProvider
 from ai_cad_designer.llm import providers as provider_module
@@ -106,6 +107,44 @@ def test_constraint_analysis_falls_back_to_editable_reference_values() -> None:
     }
     assert result["parameters"]["tolerance_mm"]["value"] == 0.25
     assert "手工确认" in result["notes"][0]
+
+
+def test_gui_design_passes_requested_blender_preview(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    class Result:
+        exported_files: list[str] = []
+
+        @staticmethod
+        def to_dict():
+            return {"preview": {"visual": {"status": "passed"}}}
+
+    class Workflow:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def run(self, request, **kwargs):
+            captured["request"] = request
+            captured.update(kwargs)
+            return Result()
+
+    monkeypatch.setattr(gui_server, "IndustrialDesignWorkflow", Workflow)
+    handler = object.__new__(AICADRequestHandler)
+    handler.export_root = tmp_path
+
+    response = handler._design(
+        {
+            "planner": "rules",
+            "request": "Design a portable sensor enclosure",
+            "blender_preview": True,
+        }
+    )
+
+    assert captured["blender_preview"] is True
+    assert response["preview"]["visual"]["status"] == "passed"
 
 
 class FakeVisionProvider(DesignLLMProvider):

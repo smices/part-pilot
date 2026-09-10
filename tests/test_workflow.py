@@ -441,6 +441,7 @@ def test_sensor_workflow_exports_printable_parts(tmp_path: Path) -> None:
     assert payload["evidence"]["geometry"]["status"] == "passed"
     assert payload["evidence"]["slicing"]["status"] == "not_run"
     assert payload["evidence"]["physical"]["status"] == "not_run"
+    assert payload["preview"]["visual"]["status"] == "not_run"
     assert not payload["manufacturable"]
     assert payload["planner"] == {
         "requested": "rules",
@@ -459,6 +460,49 @@ def test_sensor_workflow_exports_printable_parts(tmp_path: Path) -> None:
     assert (tmp_path / "sensor_lid.step").is_file()
     assert (tmp_path / "sensor_lid.stl").is_file()
     assert (tmp_path / "two_piece_sensor_enclosure.step").is_file()
+
+
+def test_requested_blender_preview_failure_keeps_cad_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def failed_preview(stl_paths, output_dir):
+        assert [path.name for path in stl_paths] == [
+            "sensor_base.stl",
+            "sensor_lid.stl",
+        ]
+        preview_dir = output_dir / "blender_preview"
+        preview_dir.mkdir()
+        manifest = preview_dir / "visual_preview.json"
+        diagnostic = preview_dir / "diagnostic.json"
+        manifest.write_text("{}", encoding="utf-8")
+        diagnostic.write_text("render failed", encoding="utf-8")
+        return {
+            "status": "failed",
+            "summary": "Blender preview failed; diagnostics were retained.",
+            "artifacts": [
+                "blender_preview/visual_preview.json",
+                "blender_preview/diagnostic.json",
+            ],
+        }
+
+    monkeypatch.setattr(
+        "ai_cad_designer.workflow.render_isometric_preview",
+        failed_preview,
+    )
+    result = IndustrialDesignWorkflow(tmp_path).run(
+        "Design a portable sensor enclosure",
+        blender_preview=True,
+    )
+
+    assert result.passed
+    assert result.to_dict()["preview"]["visual"]["status"] == "failed"
+    assert (tmp_path / "blender_preview" / "visual_preview.json").is_file()
+    assert (tmp_path / "blender_preview" / "diagnostic.json").is_file()
+    assert all(
+        "blender_preview" not in path or Path(path).is_file()
+        for path in result.exported_files
+    )
 
 
 def test_smart_fan_demo_exports_complete_assembly(tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ from typing import Any
 import cadquery as cq
 
 from .airflow import analyze_smart_fan_airflow
+from .blender_preview import not_run_preview, render_isometric_preview
 from .structural import analyze_smart_fan_structure
 from .agents import (
     AssemblyAgent,
@@ -162,6 +163,7 @@ class IndustrialDesignWorkflow:
         image_paths: list[str | Path] | None = None,
         vision_report: dict[str, Any] | None = None,
         slice_manufacturing: bool = False,
+        blender_preview: bool = False,
         engineering_parameters: dict[str, object] | None = None,
         manufacturing_parameters: dict[str, object] | None = None,
     ) -> WorkflowResult:
@@ -354,6 +356,7 @@ class IndustrialDesignWorkflow:
             assembly,
             vision=vision_report,
             slice_manufacturing=slice_manufacturing,
+            blender_preview=blender_preview,
         )
 
     @staticmethod
@@ -649,6 +652,7 @@ class IndustrialDesignWorkflow:
         *,
         vision: dict[str, Any] | None,
         slice_manufacturing: bool,
+        blender_preview: bool,
     ):
         files: list[str] = []
         stl_paths: list[Path] = []
@@ -2313,6 +2317,17 @@ class IndustrialDesignWorkflow:
             manufacturing=manufacturing,
             structure=structure,
         )
+        visual = (
+            render_isometric_preview(stl_paths, self.output_dir)
+            if blender_preview
+            else not_run_preview()
+        )
+        preview["visual"] = visual
+        if blender_preview:
+            for artifact in visual.get("artifacts", []):
+                path = (self.output_dir / str(artifact)).resolve()
+                if self.output_dir in path.parents and path.is_file():
+                    files.append(str(path))
         result = WorkflowResult(
             proposal=proposal,
             exported_files=files,

@@ -142,6 +142,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="run real OrcaSlicer PETG slicing and export G-code 3MF artifacts",
     )
     parser.add_argument(
+        "--blender-preview",
+        action="store_true",
+        help="render current-run STL files in an isolated Blender process",
+    )
+    parser.add_argument(
         "--engineering-parameters",
         metavar="JSON",
         help="JSON object with explicit engineering parameter values and sources",
@@ -246,6 +251,7 @@ def main() -> int:
             request,
             image_paths=args.image,
             slice_manufacturing=args.slice,
+            blender_preview=args.blender_preview,
             engineering_parameters=engineering_parameters or None,
             manufacturing_parameters=manufacturing_parameters or None,
         )

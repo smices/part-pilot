@@ -18,6 +18,7 @@ const elements = {
   removable: document.querySelector("#removable"),
   minimalSupports: document.querySelector("#minimalSupports"),
   sliceManufacturing: document.querySelector("#sliceManufacturing"),
+  blenderPreview: document.querySelector("#blenderPreview"),
   analyzeConstraints: document.querySelector("#analyzeConstraints"),
   constraintStatus: document.querySelector("#constraintStatus"),
   saveProfile: document.querySelector("#saveProfile"),
@@ -455,6 +456,7 @@ function requestPayload() {
     planner: elements.planner.value,
     model: elements.model.value.trim(),
     slice_manufacturing: elements.sliceManufacturing.checked,
+    blender_preview: elements.blenderPreview.checked,
     engineering_parameters: engineeringParameters,
     manufacturing_parameters: manufacturingParameters,
   };
@@ -724,7 +726,7 @@ function evidenceLabel(evidence) {
   return labels[evidence?.status] || "UNKNOWN";
 }
 
-function renderValidation(validation, evidence, planner) {
+function renderValidation(validation, evidence, planner, visual) {
   elements.validationSection.hidden = false;
   const entries = Object.entries(validation || {});
   const geometry = evidence?.geometry;
@@ -742,13 +744,19 @@ function renderValidation(validation, evidence, planner) {
       <b class="${fallback?.status === "failed" || fallback?.status === "blocked" ? "fail" : ""}">${evidenceLabel(fallback)}</b>
     </div>
   ` : "";
+  const visualRow = visual ? `
+    <div class="validation-row">
+      <span>Blender preview · ${escapeHtml(visual.summary || "")}</span>
+      <b class="${visual.status === "failed" || visual.status === "blocked" ? "fail" : ""}">${evidenceLabel(visual)}</b>
+    </div>
+  ` : "";
   const geometryRows = entries.map(([name, report]) => `
     <div class="validation-row">
       <span>${escapeHtml(name)} · OCP / mesh / build volume</span>
       <b class="${report.printable ? "" : "fail"}">${report.printable ? "PRINTABLE" : "FAILED"}</b>
     </div>
   `).join("");
-  elements.validationList.innerHTML = evidenceRows + plannerRow + geometryRows;
+  elements.validationList.innerHTML = evidenceRows + plannerRow + visualRow + geometryRows;
 }
 
 function renderManufacturing(manufacturing, evidence) {
@@ -1908,7 +1916,12 @@ function showResult(result, visionOnly = false) {
     renderProposal(result.proposal);
     renderBom(result.bom);
     renderModels(result.downloads, result.preview);
-    renderValidation(result.validation, result.evidence, result.planner);
+    renderValidation(
+      result.validation,
+      result.evidence,
+      result.planner,
+      result.preview?.visual,
+    );
     renderAirflow(result.airflow);
     renderStructure(result.structure);
     renderManufacturing(result.manufacturing, result.evidence);
