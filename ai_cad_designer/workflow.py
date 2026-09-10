@@ -625,11 +625,11 @@ class IndustrialDesignWorkflow:
                 raise
             self._actual_planner = "rules"
             self._fallback = Evidence(
-                "passed",
-                "Rules planner replaced an unavailable planner.",
+                "blocked",
+                "Rules fallback used; template coverage is unverified.",
                 {
                     "reason": type(exc).__name__,
-                    "coverage": "covered",
+                    "coverage": "unverified",
                 },
             )
             brief = self.design_agent.analyze(original_request)

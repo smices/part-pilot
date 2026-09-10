@@ -101,11 +101,11 @@ def test_rules_fallback_is_recorded_and_strict_mode_raises(tmp_path: Path) -> No
         "requested": "offline-planner",
         "actual": "rules",
         "fallback": {
-            "status": "passed",
-            "summary": "Rules planner replaced an unavailable planner.",
+            "status": "blocked",
+            "summary": "Rules fallback used; template coverage is unverified.",
             "details": {
                 "reason": "LLMPlanningError",
-                "coverage": "covered",
+                "coverage": "unverified",
             },
         },
     }
