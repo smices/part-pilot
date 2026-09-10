@@ -188,6 +188,31 @@ def test_gui_pcb_passes_measured_input_and_configuration(
     assert captured["print_configuration"] == {"confirmed": True}
 
 
+def test_gui_submits_background_job_without_running_duplicate_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Job:
+        def to_dict(self):
+            return {"job_id": "job-1", "status": "queued", "result": None, "error": None}
+
+    class Jobs:
+        def __init__(self):
+            self.payload = None
+
+        def submit(self, payload, work):
+            self.payload = payload
+            return Job()
+
+    jobs = Jobs()
+    monkeypatch.setattr(gui_server, "JOBS", jobs)
+    response = AICADRequestHandler._submit_job(
+        None, {"pcb_input": {"length": 60}}, lambda payload: {"ignored": True}
+    )
+
+    assert response["job_id"] == "job-1"
+    assert jobs.payload == {"pcb_input": {"length": 60}}
+
+
 class FakeVisionProvider(DesignLLMProvider):
     name = "fake-vision"
 

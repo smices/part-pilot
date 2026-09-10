@@ -26,6 +26,7 @@ from .llm import (
     proposal_from_payload,
 )
 from .agents.design_agent import DesignAgent
+from .jobs import LocalJobManager
 from .workflow import IndustrialDesignWorkflow
 
 
@@ -45,6 +46,7 @@ DATA_URL_PATTERN = re.compile(
     r"([A-Za-z0-9+/=\s]+)$"
 )
 CAD_LOCK = threading.Lock()
+JOBS = LocalJobManager()
 
 
 def decode_uploaded_images(items: Any, directory: Path) -> list[Path]:
@@ -110,6 +112,9 @@ class AICADRequestHandler(BaseHTTPRequestHandler):
         if parsed.path == "/api/status":
             self._status()
             return
+        if parsed.path.startswith("/api/jobs/"):
+            self._job_status(parsed.path.removeprefix("/api/jobs/"))
+            return
         if parsed.path.startswith("/api/files/"):
             self._download(unquote(parsed.path.removeprefix("/api/files/")))
             return
@@ -117,7 +122,10 @@ class AICADRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path not in {"/api/vision", "/api/constraints", "/api/design", "/api/pcb"}:
+        if parsed.path.startswith("/api/jobs/") and parsed.path.endswith("/cancel"):
+            self._job_cancel(parsed.path.removeprefix("/api/jobs/").removesuffix("/cancel"))
+            return
+        if parsed.path not in {"/api/vision", "/api/constraints", "/api/design", "/api/pcb", "/api/jobs/design", "/api/jobs/pcb"}:
             self._json_error(HTTPStatus.NOT_FOUND, "unknown endpoint")
             return
         try:
@@ -128,6 +136,10 @@ class AICADRequestHandler(BaseHTTPRequestHandler):
                 result = self._constraints(payload)
             elif parsed.path == "/api/pcb":
                 result = self._pcb(payload)
+            elif parsed.path == "/api/jobs/design":
+                result = self._submit_job(payload, self._design)
+            elif parsed.path == "/api/jobs/pcb":
+                result = self._submit_job(payload, self._pcb)
             else:
                 result = self._design(payload)
         except (LLMPlanningError, ValueError) as exc:
@@ -140,6 +152,24 @@ class AICADRequestHandler(BaseHTTPRequestHandler):
             )
             return
         self._send_json(HTTPStatus.OK, result)
+
+    def _submit_job(self, payload: dict[str, Any], work) -> dict[str, Any]:
+        job = JOBS.submit(payload, lambda: work(payload))
+        return job.to_dict()
+
+    def _job_status(self, job_id: str) -> None:
+        job = JOBS.get(job_id)
+        if job is None:
+            self._json_error(HTTPStatus.NOT_FOUND, "job not found")
+            return
+        self._send_json(HTTPStatus.OK, job.to_dict())
+
+    def _job_cancel(self, job_id: str) -> None:
+        job = JOBS.cancel(job_id)
+        if job is None:
+            self._json_error(HTTPStatus.NOT_FOUND, "job not found")
+            return
+        self._send_json(HTTPStatus.OK, job.to_dict())
 
     def _read_json(self) -> dict[str, Any]:
         content_length = self.headers.get("Content-Length")
