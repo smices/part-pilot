@@ -77,3 +77,23 @@ def test_pcb_workflow_exports_two_piece_enclosure(tmp_path):
     assert (tmp_path / "pcb_base.step").is_file()
     assert (tmp_path / "pcb_lid.stl").is_file()
     assert result.preview["visual"]["status"] == "not_run"
+    assert result.to_dict()["evidence"]["input"]["status"] == "blocked"
+    assert not result.manufacturable
+
+
+def test_pcb_workflow_forwards_slice_request(tmp_path, monkeypatch):
+    captured = {}
+
+    class Result:
+        evidence = {}
+
+        def to_dict(self):
+            return {}
+
+    def fake_manufacture(self, *args, **kwargs):
+        captured.update(kwargs)
+        return Result()
+
+    monkeypatch.setattr(IndustrialDesignWorkflow, "_manufacture", fake_manufacture)
+    assert isinstance(IndustrialDesignWorkflow(tmp_path).run_pcb(payload(), slice_manufacturing=True), Result)
+    assert captured["slice_manufacturing"] is True

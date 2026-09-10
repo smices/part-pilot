@@ -1,0 +1,14 @@
+{
+  "length": {"value": 60, "unit": "mm", "source": "user_measurement", "confirmed": true},
+  "width": {"value": 40, "unit": "mm", "source": "user_measurement", "confirmed": true},
+  "thickness": {"value": 1.6, "unit": "mm", "source": "user_measurement", "confirmed": true},
+  "max_component_height": {"value": 12, "unit": "mm", "source": "user_measurement", "confirmed": true},
+  "mounting_holes": [
+    {"x": {"value": 5, "unit": "mm", "source": "user_measurement", "confirmed": true}, "y": {"value": 5, "unit": "mm", "source": "user_measurement", "confirmed": true}, "diameter": {"value": 3, "unit": "mm", "source": "user_measurement", "confirmed": true}},
+    {"x": {"value": 55, "unit": "mm", "source": "user_measurement", "confirmed": true}, "y": {"value": 35, "unit": "mm", "source": "user_measurement", "confirmed": true}, "diameter": {"value": 3, "unit": "mm", "source": "user_measurement", "confirmed": true}}
+  ],
+  "interfaces": [
+    {"name": "USB-C", "face": "rear", "x": {"value": 45, "unit": "mm", "source": "user_measurement", "confirmed": true}, "y": {"value": 40, "unit": "mm", "source": "user_measurement", "confirmed": true}, "width": {"value": 8, "unit": "mm", "source": "user_measurement", "confirmed": true}, "height": {"value": 4, "unit": "mm", "source": "user_measurement", "confirmed": true}}
+  ],
+  "keepouts": []
+}

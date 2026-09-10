@@ -252,7 +252,7 @@ class WorkflowResult:
         return all(
             evidence[name].status == "passed"
             for name in ("files", "geometry", "slicing")
-        )
+        ) and ("input" not in evidence or evidence["input"].status == "passed")
 
     def to_dict(self) -> dict[str, Any]:
         evidence = self.evidence_records()

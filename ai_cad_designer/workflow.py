@@ -365,6 +365,7 @@ class IndustrialDesignWorkflow:
         pcb_payload: dict[str, Any],
         *,
         blender_preview: bool = False,
+        slice_manufacturing: bool = False,
     ) -> WorkflowResult:
         """Generate a traceable removable enclosure from measured PCB input."""
         pcb = PCBMechanicalInput.from_payload(pcb_payload)
@@ -381,7 +382,16 @@ class IndustrialDesignWorkflow:
         )
         parts = list(self.joint_agent.pcb_two_piece_enclosure(pcb))
         assembly = self.assembly_agent.pcb_enclosure(parts[0], parts[1])
-        return self._manufacture(proposal, parts, "pcb_enclosure", assembly, vision=None, slice_manufacturing=False, blender_preview=blender_preview)
+        result = self._manufacture(proposal, parts, "pcb_enclosure", assembly, vision=None, slice_manufacturing=slice_manufacturing, blender_preview=blender_preview)
+        pending = pcb.pending_confirmation()
+        result.evidence["input"] = Evidence(
+            "passed" if not pending else "blocked",
+            "All PCB measurements are confirmed." if not pending else "PCB input needs confirmation before manufacturing.",
+            {"pending_confirmation": pending, "reference_frame": "PCB lower-left; +X length, +Y width, +Z up"},
+        )
+        report_path = self.output_dir / "validation_report.json"
+        report_path.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        return result
 
     @staticmethod
     def _reconcile_smart_fan_proposal_bom(proposal, parts: list[CADPart]) -> None:

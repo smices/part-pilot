@@ -251,7 +251,7 @@ def main() -> int:
             )
         )
         if args.workflow == "pcb":
-            result = workflow.run_pcb(_read_json_object(args.pcb_input, "pcb input"), blender_preview=args.blender_preview)
+            result = workflow.run_pcb(_read_json_object(args.pcb_input, "pcb input"), blender_preview=args.blender_preview, slice_manufacturing=args.slice)
         else:
             result = workflow.run(
             request,
