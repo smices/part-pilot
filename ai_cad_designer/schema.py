@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from pathlib import Path
 from typing import Any
+
+
+MATERIALS = ("PETG", "PLA", "ABS", "ASA")
+EVIDENCE_STATUSES = ("not_run", "passed", "failed", "blocked")
 
 
 @dataclass(frozen=True)
@@ -35,6 +40,26 @@ class PartPlan:
     purpose: str
     assembly_method: str
     dimensions_mm: tuple[float, float, float]
+
+
+@dataclass(frozen=True)
+class Evidence:
+    """One serializable verification result with an explicit execution state."""
+
+    status: str
+    summary: str
+    details: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.status not in EVIDENCE_STATUSES:
+            raise ValueError(f"unsupported evidence status: {self.status}")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "status": self.status,
+            "summary": self.summary,
+            "details": self.details,
+        }
 
 
 @dataclass
@@ -104,15 +129,106 @@ class WorkflowResult:
     bom: dict[str, Any] | None = None
     calibration: dict[str, Any] | None = None
     design_review: dict[str, Any] | None = None
+    evidence: dict[str, Evidence] = field(default_factory=dict)
+    requested_planner: str | None = None
+    actual_planner: str | None = None
+    fallback: Evidence = field(
+        default_factory=lambda: Evidence(
+            "not_run",
+            "Rules fallback was not requested.",
+        )
+    )
+
+    def evidence_records(self) -> dict[str, Evidence]:
+        """Return the four evidence classes even for partial workflow output."""
+        missing_files = [
+            path for path in self.exported_files if not Path(path).is_file()
+        ]
+        files = Evidence(
+            "passed" if self.exported_files and not missing_files else "failed",
+            (
+                f"{len(self.exported_files)} exported files were found."
+                if self.exported_files and not missing_files
+                else "One or more exported files are missing."
+            ),
+            {
+                "checked": len(self.exported_files),
+                "missing": missing_files,
+            },
+        )
+        geometry = Evidence(
+            (
+                "passed"
+                if self.validation
+                and all(
+                    report.get("printable", False)
+                    for report in self.validation.values()
+                )
+                else "failed"
+            ),
+            (
+                "All geometry validations are printable."
+                if self.validation
+                and all(
+                    report.get("printable", False)
+                    for report in self.validation.values()
+                )
+                else "No passing geometry validation was produced."
+            ),
+            {"part_count": len(self.validation)},
+        )
+        if self.manufacturing is None:
+            slicing = Evidence(
+                "not_run",
+                "Real slicing was not requested.",
+            )
+        elif not self.manufacturing:
+            slicing = Evidence(
+                "failed",
+                "Slicing returned no diagnostic report.",
+            )
+        else:
+            status = self.manufacturing.get("status")
+            if status not in EVIDENCE_STATUSES:
+                status = "passed" if self.manufacturing.get("passed") else "failed"
+            slicing = Evidence(
+                status,
+                (
+                    "Real slicing report passed."
+                    if status == "passed"
+                    else (
+                        "Real slicing is blocked; diagnostics were retained."
+                        if status == "blocked"
+                        else "Real slicing report failed; diagnostics were retained."
+                    )
+                ),
+                {
+                    "report_path": self.manufacturing.get("report_path"),
+                    "diagnostic": self.manufacturing.get("diagnostic"),
+                },
+            )
+        records = {
+            "files": files,
+            "geometry": geometry,
+            "slicing": slicing,
+            "physical": Evidence(
+                "not_run",
+                "No physical print or assembly evidence was recorded.",
+            ),
+        }
+        records.update(self.evidence)
+        return records
 
     @property
     def passed(self) -> bool:
-        geometry_passed = all(
-            report.get("printable", False) for report in self.validation.values()
-        )
-        return geometry_passed and (
-            self.manufacturing is None
-            or bool(self.manufacturing.get("passed", False))
+        evidence = self.evidence_records()
+        return (
+            evidence["files"].status == "passed"
+            and evidence["geometry"].status == "passed"
+            and (
+                self.manufacturing is None
+                or bool(self.manufacturing.get("passed", False))
+            )
         ) and (
             self.airflow is None
             or bool(self.airflow.get("passed", False))
@@ -130,7 +246,16 @@ class WorkflowResult:
             or bool(self.design_review.get("passed", False))
         )
 
+    @property
+    def manufacturable(self) -> bool:
+        evidence = self.evidence_records()
+        return all(
+            evidence[name].status == "passed"
+            for name in ("files", "geometry", "slicing")
+        )
+
     def to_dict(self) -> dict[str, Any]:
+        evidence = self.evidence_records()
         return {
             "proposal": self.proposal.to_dict(),
             "exported_files": self.exported_files,
@@ -143,5 +268,14 @@ class WorkflowResult:
             "bom": self.bom,
             "calibration": self.calibration,
             "design_review": self.design_review,
+            "evidence": {
+                name: record.to_dict() for name, record in evidence.items()
+            },
+            "planner": {
+                "requested": self.requested_planner or self.proposal.planner,
+                "actual": self.actual_planner or self.proposal.planner,
+                "fallback": self.fallback.to_dict(),
+            },
+            "manufacturable": self.manufacturable,
             "passed": self.passed,
         }

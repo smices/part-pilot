@@ -72,9 +72,11 @@ def test_gui_loads_local_interactive_stl_viewer() -> None:
     assert "SMART_FAN_DEMO" in app
     assert "dimension-editor" in app
     assert "renderModels(result.downloads, result.preview)" in app
-    assert "renderManufacturing(result.manufacturing)" in app
+    assert "renderManufacturing(result.manufacturing, result.evidence)" in app
     assert "renderAirflow(result.airflow)" in app
     assert "renderCalibration(result.calibration)" in app
+    assert "function evidenceLabel(evidence)" in app
+    assert "renderValidation(result.validation, result.evidence, result.planner)" in app
     assert "preview?.calibration?.items" in app
     assert "manufacturing_parameters: manufacturingParameters" in app
     assert 'const CAD_PROFILE_KEY = "forge.aiCadProfile.v1"' in app

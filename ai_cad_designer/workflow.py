@@ -32,8 +32,8 @@ from .orca_project import (
     create_support_enforcer_project,
     inspect_support_enforcer_project,
 )
-from .schema import ComponentSpec, WorkflowResult
-from .slicing import OrcaSlicerRunner
+from .schema import ComponentSpec, Evidence, MATERIALS, WorkflowResult
+from .slicing import OrcaSlicerError, OrcaSlicerRunner
 from .support_modifiers import create_support_modifier_parts
 from .validation import validate_assembly_interference
 
@@ -128,6 +128,32 @@ class IndustrialDesignWorkflow:
         self.print_agent = PrintAgent()
         self.provider = provider
         self.fallback_to_rules = fallback_to_rules
+        self._requested_planner = "rules"
+        self._actual_planner = "rules"
+        self._fallback = Evidence(
+            "not_run",
+            "Rules fallback was not requested.",
+            {"coverage": "not_applicable"},
+        )
+
+    def _slicing_diagnostic(
+        self,
+        status: str,
+        message: str,
+    ) -> dict[str, Any]:
+        report_path = self.output_dir / "slicing_diagnostic.json"
+        report = {
+            "passed": False,
+            "status": status,
+            "diagnostic": message,
+            "parts": {},
+            "report_path": str(report_path.resolve()),
+        }
+        report_path.write_text(
+            json.dumps(report, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        return report
 
     def run(
         self,
@@ -139,6 +165,15 @@ class IndustrialDesignWorkflow:
         engineering_parameters: dict[str, object] | None = None,
         manufacturing_parameters: dict[str, object] | None = None,
     ) -> WorkflowResult:
+        self._requested_planner = (
+            self.provider.name if self.provider is not None else "rules"
+        )
+        self._actual_planner = self._requested_planner
+        self._fallback = Evidence(
+            "not_run",
+            "Rules fallback was not requested.",
+            {"coverage": "not_applicable"},
+        )
         images = [Path(path).expanduser().resolve() for path in image_paths or []]
         if images and self.provider is None:
             raise LLMPlanningError(
@@ -214,7 +249,6 @@ class IndustrialDesignWorkflow:
             "wall_thickness_mm": (1.2, 8.0),
             "layer_height_mm": (0.08, 0.4),
         }
-        allowed_materials = {"PETG", "PLA", "ABS", "ASA"}
         resolved_manufacturing: dict[str, object] = {}
         manufacturing_sources: dict[str, str] = {}
         raw_manufacturing = manufacturing_parameters or {}
@@ -232,9 +266,9 @@ class IndustrialDesignWorkflow:
             )
             if name == "material":
                 material = str(value).upper()
-                if material not in allowed_materials:
+                if material not in MATERIALS:
                     raise ValueError(
-                        "material must be PETG, PLA, ABS, or ASA"
+                        "material must be " + ", ".join(MATERIALS)
                     )
                 resolved_manufacturing[name] = material
             else:
@@ -575,10 +609,12 @@ class IndustrialDesignWorkflow:
 
     def _plan(self, request: str, *, original_request: str):
         if self.provider is None:
+            self._actual_planner = "rules"
             brief = self.design_agent.analyze(original_request)
             return self.design_agent.propose(brief)
         try:
             payload = self.provider.plan(request)
+            self._actual_planner = self.provider.name
             return proposal_from_payload(
                 payload,
                 original_request,
@@ -587,6 +623,15 @@ class IndustrialDesignWorkflow:
         except (LLMPlanningError, ValueError) as exc:
             if not self.fallback_to_rules:
                 raise
+            self._actual_planner = "rules"
+            self._fallback = Evidence(
+                "passed",
+                "Rules planner replaced an unavailable planner.",
+                {
+                    "reason": type(exc).__name__,
+                    "coverage": "covered",
+                },
+            )
             brief = self.design_agent.analyze(original_request)
             proposal = self.design_agent.propose(brief)
             proposal.planner = f"rules fallback ({self.provider.name})"
@@ -754,16 +799,27 @@ class IndustrialDesignWorkflow:
         manufacturing = None
         calibration = None
         if slice_manufacturing:
-            rotations = {}
-            manufacturing = OrcaSlicerRunner().slice_parts(
-                stl_paths,
-                self.output_dir,
-                rotations=rotations,
-                support_strategy=proposal.support_strategy,
-            )
+            if proposal.brief.material != "PETG":
+                manufacturing = self._slicing_diagnostic(
+                    "blocked",
+                    "Real OrcaSlicer workflow currently supports PETG only.",
+                )
+            else:
+                try:
+                    manufacturing = OrcaSlicerRunner().slice_parts(
+                        stl_paths,
+                        self.output_dir,
+                        rotations={},
+                        support_strategy=proposal.support_strategy,
+                    )
+                except OrcaSlicerError as exc:
+                    manufacturing = self._slicing_diagnostic(
+                        "failed",
+                        str(exc),
+                    )
             files.extend(
                 item["artifact"]
-                for item in manufacturing["parts"].values()
+                for item in manufacturing.get("parts", {}).values()
             )
             threshold_sweep = manufacturing.get(
                 "support_threshold_sweep",
@@ -778,7 +834,7 @@ class IndustrialDesignWorkflow:
                 if threshold_sweep.get("report_path"):
                     files.append(threshold_sweep["report_path"])
             files.append(manufacturing["report_path"])
-            if manufacturing_control_parts:
+            if manufacturing.get("passed") and manufacturing_control_parts:
                 control_output = (
                     self.output_dir
                     / "manufacturing_controls"
@@ -830,7 +886,7 @@ class IndustrialDesignWorkflow:
                 calibration_parts
             )
             calibration_manufacturing = None
-            if slice_manufacturing:
+            if slice_manufacturing and manufacturing.get("passed"):
                 calibration_output = self.output_dir / "calibration_slices"
                 calibration_manufacturing = OrcaSlicerRunner().slice_parts(
                     calibration_stl_paths,
@@ -1048,6 +1104,7 @@ class IndustrialDesignWorkflow:
         if (
             proposal.brief.design_family == "smart_fan"
             and manufacturing is not None
+            and manufacturing.get("passed")
         ):
             support_chassis = next(
                 part for part in parts if part.name == "fan_chassis"
@@ -2267,6 +2324,9 @@ class IndustrialDesignWorkflow:
             structure=structure,
             bom=bom,
             calibration=calibration,
+            requested_planner=self._requested_planner,
+            actual_planner=self._actual_planner,
+            fallback=self._fallback,
         )
         if vision:
             vision_path = self.output_dir / "hardware_analysis.json"
@@ -2311,6 +2371,7 @@ class IndustrialDesignWorkflow:
             result.exported_files.append(str(design_review_path))
         report_path = self.output_dir / "validation_report.json"
         result.exported_files.append(str(report_path))
+        report_path.touch()
         report_path.write_text(
             json.dumps(result.to_dict(), indent=2, ensure_ascii=False),
             encoding="utf-8",

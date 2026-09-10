@@ -714,23 +714,56 @@ function renderBom(bom) {
   elements.bomList.innerHTML = hardwareRows + consumableRows;
 }
 
-function renderValidation(validation, passed) {
+function evidenceLabel(evidence) {
+  const labels = {
+    not_run: "NOT RUN",
+    passed: "PASSED",
+    failed: "FAILED",
+    blocked: "BLOCKED",
+  };
+  return labels[evidence?.status] || "UNKNOWN";
+}
+
+function renderValidation(validation, evidence, planner) {
   elements.validationSection.hidden = false;
   const entries = Object.entries(validation || {});
-  elements.validationSummary.textContent = passed
-    ? `${entries.length}/${entries.length} PASSED`
-    : "CHECK REQUIRED";
-  elements.validationList.innerHTML = entries.map(([name, report]) => `
+  const geometry = evidence?.geometry;
+  elements.validationSummary.textContent = `GEOMETRY ${evidenceLabel(geometry)}`;
+  const evidenceRows = Object.entries(evidence || {}).map(([name, record]) => `
+    <div class="validation-row">
+      <span>${escapeHtml(name)} · ${escapeHtml(record.summary || "")}</span>
+      <b class="${record.status === "failed" || record.status === "blocked" ? "fail" : ""}">${evidenceLabel(record)}</b>
+    </div>
+  `).join("");
+  const fallback = planner?.fallback;
+  const plannerRow = planner ? `
+    <div class="validation-row">
+      <span>planner · ${escapeHtml(planner.requested || "rules")} → ${escapeHtml(planner.actual || "rules")}</span>
+      <b class="${fallback?.status === "failed" || fallback?.status === "blocked" ? "fail" : ""}">${evidenceLabel(fallback)}</b>
+    </div>
+  ` : "";
+  const geometryRows = entries.map(([name, report]) => `
     <div class="validation-row">
       <span>${escapeHtml(name)} · OCP / mesh / build volume</span>
       <b class="${report.printable ? "" : "fail"}">${report.printable ? "PRINTABLE" : "FAILED"}</b>
     </div>
   `).join("");
+  elements.validationList.innerHTML = evidenceRows + plannerRow + geometryRows;
 }
 
-function renderManufacturing(manufacturing) {
-  elements.manufacturingSection.hidden = !manufacturing;
-  if (!manufacturing) return;
+function renderManufacturing(manufacturing, evidence) {
+  const slicing = evidence?.slicing;
+  elements.manufacturingSection.hidden = false;
+  if (!manufacturing) {
+    elements.manufacturingSummary.textContent = `SLICING ${evidenceLabel(slicing)}`;
+    elements.manufacturingList.innerHTML = `
+      <div class="validation-row">
+        <span>${escapeHtml(slicing?.summary || "Real slicing was not requested.")}</span>
+        <b>${evidenceLabel(slicing)}</b>
+      </div>
+    `;
+    return;
+  }
   const parts = Object.values(manufacturing.parts || {});
   const totals = manufacturing.totals || {};
   const support = manufacturing.support_analysis || {};
@@ -746,9 +779,9 @@ function renderManufacturing(manufacturing) {
   const supportTimePercent = (
     Number(support.additional_time_ratio || 0) * 100
   ).toFixed(1);
-  elements.manufacturingSummary.textContent = manufacturing.passed
+  elements.manufacturingSummary.textContent = slicing?.status === "passed"
     ? `${minutes} MIN · ${Number(totals.filament_weight_g || 0).toFixed(1)} G PETG`
-    : "SLICE CHECK REQUIRED";
+    : `SLICING ${evidenceLabel(slicing)}`;
   const supportRow = support.method ? `
     <div class="validation-row">
       <span>自动支撑对照 · +${Number(support.additional_filament_weight_g || 0).toFixed(1)} g PETG（+${supportMaterialPercent}%）· +${Math.round(Number(support.additional_time_seconds || 0) / 60)} min（+${supportTimePercent}%）· 同方向双切片</span>
@@ -1875,10 +1908,10 @@ function showResult(result, visionOnly = false) {
     renderProposal(result.proposal);
     renderBom(result.bom);
     renderModels(result.downloads, result.preview);
-    renderValidation(result.validation, result.passed);
+    renderValidation(result.validation, result.evidence, result.planner);
     renderAirflow(result.airflow);
     renderStructure(result.structure);
-    renderManufacturing(result.manufacturing);
+    renderManufacturing(result.manufacturing, result.evidence);
     renderCalibration(result.calibration);
     renderFiles(result.downloads, result.run_id);
     setWizardStep(4);

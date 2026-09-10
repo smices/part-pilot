@@ -436,6 +436,21 @@ def test_sensor_workflow_exports_printable_parts(tmp_path: Path) -> None:
         },
     )
     assert result.passed
+    payload = result.to_dict()
+    assert payload["evidence"]["files"]["status"] == "passed"
+    assert payload["evidence"]["geometry"]["status"] == "passed"
+    assert payload["evidence"]["slicing"]["status"] == "not_run"
+    assert payload["evidence"]["physical"]["status"] == "not_run"
+    assert not payload["manufacturable"]
+    assert payload["planner"] == {
+        "requested": "rules",
+        "actual": "rules",
+        "fallback": {
+            "status": "not_run",
+            "summary": "Rules fallback was not requested.",
+            "details": {"coverage": "not_applicable"},
+        },
+    }
     assert result.proposal.brief.tolerance_mm == 0.3
     assert result.proposal.brief.wall_thickness_mm == 2.8
     assert result.proposal.brief.layer_height_mm == 0.24

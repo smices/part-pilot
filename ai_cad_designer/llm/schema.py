@@ -8,12 +8,12 @@ from ai_cad_designer.schema import (
     ComponentSpec,
     DesignBrief,
     DesignProposal,
+    MATERIALS,
     PartPlan,
 )
 
 
 DESIGN_FAMILIES = ("sensor_enclosure", "desktop_robot", "smart_fan")
-MATERIALS = ("PETG", "PLA", "ABS", "ASA", "TPU")
 ASSEMBLY_METHODS = (
     "snap_fit",
     "dovetail",
