@@ -73,3 +73,14 @@ Smart Fan 的最小回归集覆盖气流估计、参数/校准、完整装配导
 | GUI 日常流程 | 通过 | 支持 PCB JSON 编辑、异步提交、状态轮询、取消、预览与下载；活动任务 ID 在同一浏览器会话刷新后恢复。取消后的未完成任务不会标为成功。 |
 | 交付包 | 通过 | PCB 运行产生包含当前运行文件及 SHA-256 清单的 ZIP。 |
 | 实体打印和装配 | 待完成 | 需要实际设备执行试片、测量回填、正式打印、装配/拆卸并把证据回填；数字链路不得表述为实物通过。 |
+
+实体执行者应从当前切片报告复制 STL 文件名和 SHA-256 到
+`examples/physical_evidence_template.json`，填写打印后测量与装配结果，再运行：
+
+```bash
+.venv/bin/python -m ai_cad_designer.cli physical \
+  --planner rules --output "<本次输出目录>" \
+  --physical-evidence "<填写后的证据 JSON>"
+```
+
+该命令只记录与当前 STL 哈希完全匹配的实物证据；无法替代实际打印或装配。

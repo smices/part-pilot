@@ -1,0 +1,14 @@
+{
+  "printed_parts": [
+    {"file_name": "pcb_base.stl", "model_sha256": "copy from the current slicing report"},
+    {"file_name": "pcb_lid.stl", "model_sha256": "copy from the current slicing report"}
+  ],
+  "assembly": {
+    "passed": false,
+    "cycles": 0,
+    "notes": "Record PCB installation, port access, lid removal and any interference."
+  },
+  "measurements": [
+    {"feature": "lid_clearance", "value_mm": null, "instrument": "caliper"}
+  ]
+}
