@@ -84,6 +84,27 @@ print('Blender 9.9 Test')
     assert json.loads(manifest_path.read_text(encoding="utf-8"))["status"] == "passed"
 
 
+def test_preview_manifest_keeps_exploded_render_when_blender_produces_one(tmp_path: Path) -> None:
+    first = _stl(tmp_path)
+    second = tmp_path / "lid.stl"
+    second.write_text("solid lid\nendsolid lid\n", encoding="ascii")
+    fake_blender = _fake_blender(
+        tmp_path / "fake-exploded-blender",
+        """import sys
+from pathlib import Path
+output = Path(sys.argv[sys.argv.index('--') + 1])
+(output / 'isometric.png').write_bytes(b'iso')
+(output / 'exploded.png').write_bytes(b'exploded')
+print('Blender 9.9 Test')
+""",
+    )
+
+    result = render_isometric_preview([first, second], tmp_path, blender_binary=fake_blender)
+
+    assert result["exploded_render"]["exists"] is True
+    assert "blender_preview/exploded.png" in result["artifacts"]
+
+
 def test_failed_blender_keeps_local_diagnostic(tmp_path: Path) -> None:
     source = _stl(tmp_path)
     fake_blender = _fake_blender(

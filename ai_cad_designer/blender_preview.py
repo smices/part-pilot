@@ -15,6 +15,7 @@ MANIFEST_NAME = "visual_preview.json"
 DIAGNOSTIC_NAME = "diagnostic.json"
 SCRIPT_NAME = "render_isometric.py"
 RENDER_NAME = "isometric.png"
+EXPLODED_RENDER_NAME = "exploded.png"
 
 _SCRIPT = '''import sys
 from pathlib import Path
@@ -99,6 +100,22 @@ def main():
     scene.render.image_settings.file_format = "PNG"
     scene.render.filepath = str(output_dir / "isometric.png")
     bpy.ops.render.render(write_still=True)
+    if len(meshes) > 1:
+        for index, item in enumerate(meshes):
+            item.location.z += span * 0.35 * (index - (len(meshes) - 1) / 2)
+        exploded_bounds = [
+            item.matrix_world @ Vector(corner)
+            for item in meshes for corner in item.bound_box
+        ]
+        exploded_minimum = Vector(tuple(min(point[index] for point in exploded_bounds) for index in range(3)))
+        exploded_maximum = Vector(tuple(max(point[index] for point in exploded_bounds) for index in range(3)))
+        exploded_center = (exploded_minimum + exploded_maximum) / 2
+        exploded_span = max((exploded_maximum - exploded_minimum).length, 0.001)
+        camera.location = exploded_center + Vector((1, -1, 0.8)).normalized() * exploded_span * 1.8
+        camera.data.ortho_scale = exploded_span * 1.35
+        camera.rotation_euler = (exploded_center - camera.location).to_track_quat("-Z", "Y").to_euler()
+        scene.render.filepath = str(output_dir / "exploded.png")
+        bpy.ops.render.render(write_still=True)
 
 
 main()
@@ -218,6 +235,7 @@ def render_isometric_preview(
     diagnostic_path = preview_dir / DIAGNOSTIC_NAME
     script_path = preview_dir / SCRIPT_NAME
     render_path = preview_dir / RENDER_NAME
+    exploded_render_path = preview_dir / EXPLODED_RENDER_NAME
     artifacts = [_relative(root, manifest_path)]
 
     try:
@@ -315,7 +333,14 @@ def render_isometric_preview(
                             "path": _relative(root, render_path),
                             "exists": True,
                         },
-                        "artifacts": artifacts + [_relative(root, render_path)],
+                        "exploded_render": (
+                            {"file_name": EXPLODED_RENDER_NAME, "path": _relative(root, exploded_render_path), "exists": True}
+                            if exploded_render_path.is_file() and exploded_render_path.stat().st_size else None
+                        ),
+                        "artifacts": artifacts + [_relative(root, render_path)] + (
+                            [_relative(root, exploded_render_path)]
+                            if exploded_render_path.is_file() and exploded_render_path.stat().st_size else []
+                        ),
                     }
                 )
             else:
