@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from ai_cad_designer.agents.joint_agent import JointAgent
@@ -87,6 +89,8 @@ def test_pcb_workflow_exports_two_piece_enclosure(tmp_path):
     assert result.preview["visual"]["status"] == "not_run"
     assert result.to_dict()["evidence"]["input"]["status"] == "blocked"
     assert not result.manufacturable
+    assert Path(result.delivery["archive"]).is_file()
+    assert result.delivery["manifest"]["artifact_count"] >= 3
 
 
 def test_pcb_workflow_forwards_slice_request(tmp_path, monkeypatch):
@@ -94,6 +98,7 @@ def test_pcb_workflow_forwards_slice_request(tmp_path, monkeypatch):
 
     class Result:
         evidence = {}
+        exported_files = []
 
         def to_dict(self):
             return {}

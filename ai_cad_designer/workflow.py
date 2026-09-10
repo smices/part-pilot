@@ -35,6 +35,7 @@ from .orca_project import (
 )
 from .schema import ComponentSpec, DesignBrief, DesignProposal, Evidence, MATERIALS, PartPlan, WorkflowResult
 from .pcb_input import PCBMechanicalInput
+from .delivery import build_delivery_bundle
 from .repair import RepairIssue, run_bounded_repair
 from .slicing import (
     OrcaSlicerError,
@@ -412,6 +413,10 @@ class IndustrialDesignWorkflow:
             {"pending_confirmation": pending, "reference_frame": "PCB lower-left; +X length, +Y width, +Z up"},
         )
         report_path = self.output_dir / "validation_report.json"
+        report_path.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        result.exported_files.append(str(report_path))
+        result.delivery = build_delivery_bundle(self.output_dir, result.exported_files)
+        result.exported_files.append(result.delivery["archive"])
         report_path.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
         return result
 

@@ -130,6 +130,7 @@ class WorkflowResult:
     calibration: dict[str, Any] | None = None
     design_review: dict[str, Any] | None = None
     repair: dict[str, Any] | None = None
+    delivery: dict[str, Any] | None = None
     evidence: dict[str, Evidence] = field(default_factory=dict)
     requested_planner: str | None = None
     actual_planner: str | None = None
@@ -270,6 +271,7 @@ class WorkflowResult:
             "calibration": self.calibration,
             "design_review": self.design_review,
             "repair": self.repair,
+            "delivery": self.delivery,
             "evidence": {
                 name: record.to_dict() for name, record in evidence.items()
             },
