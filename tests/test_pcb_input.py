@@ -18,6 +18,16 @@ def test_pcb_input_keeps_sources_confirmation_and_coordinate_system():
     pcb = PCBMechanicalInput.from_payload(payload())
     assert pcb.length.value == 60
     assert pcb.pending_confirmation() == ["max_component_height"]
+    assert pcb.interfaces[0].face == "rear"
+    assert pcb.to_dict()["reference_frame"] == (
+        "PCB lower-left; +X length, +Y width, +Z up"
+    )
+    assert pcb.to_dict()["interfaces"][0]["x"] == {
+        "value": 50.0,
+        "unit": "mm",
+        "source": "user_measurement",
+        "confirmed": True,
+    }
 
 
 @pytest.mark.parametrize("mutate", [lambda p: p["length"].update(unit="inch"), lambda p: p["mounting_holes"][0]["x"].update(value=-1), lambda p: p["interfaces"][0]["width"].update(value=25)])
@@ -33,6 +43,21 @@ def test_pcb_input_rejects_overlapping_holes():
         PCBMechanicalInput.from_payload(data)
 
 
+@pytest.mark.parametrize("face", ["", "top", None])
+def test_pcb_input_rejects_unknown_interface_face(face):
+    data = payload(); data["interfaces"][0]["face"] = face
+    with pytest.raises(ValueError, match="interfaces\\[0\\].face"):
+        PCBMechanicalInput.from_payload(data)
+
+
+def test_pcb_input_reports_unconfirmed_keepout_field():
+    data = payload(); data["keepouts"][0]["width"]["confirmed"] = False
+    assert PCBMechanicalInput.from_payload(data).pending_confirmation() == [
+        "max_component_height",
+        "keepouts[0].width",
+    ]
+
+
 def test_pcb_dimensions_holes_and_ports_change_generated_enclosure():
     first = PCBMechanicalInput.from_payload(payload())
     changed = payload(); changed["mounting_holes"][0]["x"] = measure(12); changed["interfaces"][0]["x"] = measure(42)
@@ -41,6 +66,8 @@ def test_pcb_dimensions_holes_and_ports_change_generated_enclosure():
     second_base, _ = JointAgent().pcb_two_piece_enclosure(second)
     assert validate_printability(first_base)["printable"]
     assert validate_printability(first_lid)["printable"]
+    assert first_base.metadata["pcb_input"] == first.to_dict()
+    assert first_lid.metadata["pcb_input"] == first.to_dict()
     assert first_base.solid().Volume() != second_base.solid().Volume()
 
 

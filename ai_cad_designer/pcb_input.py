@@ -11,6 +11,7 @@ from typing import Any
 
 
 SOURCES = {"user_measurement", "datasheet", "photo_estimate", "calibration"}
+FACES = {"front", "rear", "left", "right"}
 
 
 @dataclass(frozen=True)
@@ -100,7 +101,53 @@ class PCBMechanicalInput:
         values = [("length", self.length), ("width", self.width), ("thickness", self.thickness), ("max_component_height", self.max_component_height)]
         values += [(f"mounting_holes[{i}].{key}", value) for i, hole in enumerate(self.mounting_holes) for key, value in (("x", hole.x), ("y", hole.y), ("diameter", hole.diameter))]
         values += [(f"interfaces[{i}].{key}", value) for i, interface in enumerate(self.interfaces) for key, value in (("x", interface.x), ("y", interface.y), ("width", interface.width), ("height", interface.height))]
+        values += [(f"keepouts[{i}].{key}", value) for i, keepout in enumerate(self.keepouts) for key, value in (("x", keepout.x), ("y", keepout.y), ("width", keepout.width), ("height", keepout.height))]
         return [name for name, value in values if not value.confirmed]
+
+    def to_dict(self) -> dict[str, Any]:
+        def measured(value: Measurement) -> dict[str, object]:
+            return {
+                "value": value.value,
+                "unit": "mm",
+                "source": value.source,
+                "confirmed": value.confirmed,
+            }
+
+        return {
+            "reference_frame": "PCB lower-left; +X length, +Y width, +Z up",
+            "length": measured(self.length),
+            "width": measured(self.width),
+            "thickness": measured(self.thickness),
+            "max_component_height": measured(self.max_component_height),
+            "mounting_holes": [
+                {
+                    "x": measured(hole.x),
+                    "y": measured(hole.y),
+                    "diameter": measured(hole.diameter),
+                }
+                for hole in self.mounting_holes
+            ],
+            "interfaces": [
+                {
+                    "name": interface.name,
+                    "face": interface.face,
+                    "x": measured(interface.x),
+                    "y": measured(interface.y),
+                    "width": measured(interface.width),
+                    "height": measured(interface.height),
+                }
+                for interface in self.interfaces
+            ],
+            "keepouts": [
+                {
+                    "x": measured(keepout.x),
+                    "y": measured(keepout.y),
+                    "width": measured(keepout.width),
+                    "height": measured(keepout.height),
+                }
+                for keepout in self.keepouts
+            ],
+        }
 
     def validate(self) -> None:
         if min(self.length.value, self.width.value, self.thickness.value, self.max_component_height.value) <= 0:
@@ -141,7 +188,7 @@ def _name(value: Any, name: str) -> str:
 
 
 def _face(value: Any, name: str) -> str:
-    if value not in {"front", "rear", "left", "right"}:
+    if value not in FACES:
         raise ValueError(f"{name} must be front, rear, left, or right")
     return str(value)
 

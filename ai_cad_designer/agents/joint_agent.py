@@ -45,6 +45,7 @@ class JointAgent:
         material: str = "PETG",
     ) -> tuple[CADPart, CADPart]:
         """Create a removable enclosure whose posts and ports follow PCB input."""
+        pcb.validate()
         clearance = tolerance_mm + 0.5
         length = pcb.length.value + 2 * (wall_mm + clearance)
         width = pcb.width.value + 2 * (wall_mm + clearance)
@@ -58,24 +59,45 @@ class JointAgent:
         for hole in pcb.mounting_holes:
             x = hole.x.value - pcb.length.value / 2
             y = hole.y.value - pcb.width.value / 2
-            pin_radius = max(0.4, hole.diameter.value / 2 - tolerance_mm)
-            pin = cq.Workplane("XY").center(x, y).circle(pin_radius).extrude(wall_mm + pcb.thickness.value)
+            pin = (
+                cq.Workplane("XY")
+                .center(x, y)
+                .circle(hole.diameter.value * 0.35)
+                .extrude(wall_mm + pcb.thickness.value)
+            )
             shape = shape.union(pin)
         for port in pcb.interfaces:
             z = wall_mm + pcb.thickness.value + port.height.value / 2
             if port.face in {"front", "rear"}:
                 x = port.x.value - pcb.length.value / 2
                 y = (-1 if port.face == "front" else 1) * width / 2
-                cut = cq.Workplane("XY").box(port.width.value + 2 * tolerance_mm, wall_mm + 2, port.height.value + 2 * tolerance_mm, centered=(True, True, True)).translate((x, y, z))
+                cut = cq.Workplane("XY").box(
+                    port.width.value + 2 * tolerance_mm,
+                    wall_mm + 2,
+                    port.height.value + 2 * tolerance_mm,
+                    centered=(True, True, True),
+                ).translate((x, y, z))
             else:
                 x = (-1 if port.face == "left" else 1) * length / 2
                 y = port.y.value - pcb.width.value / 2
-                cut = cq.Workplane("XY").box(wall_mm + 2, port.width.value + 2 * tolerance_mm, port.height.value + 2 * tolerance_mm, centered=(True, True, True)).translate((x, y, z))
+                cut = cq.Workplane("XY").box(
+                    wall_mm + 2,
+                    port.width.value + 2 * tolerance_mm,
+                    port.height.value + 2 * tolerance_mm,
+                    centered=(True, True, True),
+                ).translate((x, y, z))
             shape = shape.cut(cut)
         base.name = "pcb_base"
         lid.name = "pcb_lid"
         base.shape = shape
-        base.metadata.update({"pcb_input": {"length_mm": pcb.length.value, "width_mm": pcb.width.value, "hole_count": len(pcb.mounting_holes), "interface_count": len(pcb.interfaces)}, "dimensions_mm": (length, width, base_height), "joint": "snap-fit PCB enclosure"})
+        base.metadata.update(
+            {
+                "pcb_input": pcb.to_dict(),
+                "dimensions_mm": (length, width, base_height),
+                "joint": "snap-fit PCB enclosure",
+                "locator": "screwless PCB hole pins",
+            }
+        )
         lid.metadata["pcb_input"] = base.metadata["pcb_input"]
         return base, lid
 
