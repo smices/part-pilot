@@ -117,7 +117,7 @@ class AICADRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path not in {"/api/vision", "/api/constraints", "/api/design"}:
+        if parsed.path not in {"/api/vision", "/api/constraints", "/api/design", "/api/pcb"}:
             self._json_error(HTTPStatus.NOT_FOUND, "unknown endpoint")
             return
         try:
@@ -126,6 +126,8 @@ class AICADRequestHandler(BaseHTTPRequestHandler):
                 result = self._vision(payload)
             elif parsed.path == "/api/constraints":
                 result = self._constraints(payload)
+            elif parsed.path == "/api/pcb":
+                result = self._pcb(payload)
             else:
                 result = self._design(payload)
         except (LLMPlanningError, ValueError) as exc:
@@ -276,6 +278,38 @@ class AICADRequestHandler(BaseHTTPRequestHandler):
                     engineering_parameters=engineering_parameters,
                     manufacturing_parameters=manufacturing_parameters,
                 )
+        response = result.to_dict()
+        response["run_id"] = output_dir.name
+        response["downloads"] = [
+            {
+                "name": Path(path).name,
+                "url": "/api/files/"
+                + str(Path(path).resolve().relative_to(self.export_root.resolve())),
+            }
+            for path in result.exported_files
+        ]
+        return response
+
+    def _pcb(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Run the measured-PCB path without accepting image-derived dimensions."""
+        pcb_input = payload.get("pcb_input")
+        if not isinstance(pcb_input, dict):
+            raise ValueError("pcb_input must be an object")
+        print_configuration = payload.get("print_configuration")
+        if print_configuration is not None and not isinstance(
+            print_configuration, dict
+        ):
+            raise ValueError("print_configuration must be an object")
+        stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        output_dir = self.export_root / f"{stamp}-{uuid.uuid4().hex[:8]}"
+        workflow = IndustrialDesignWorkflow(output_dir)
+        with CAD_LOCK:
+            result = workflow.run_pcb(
+                pcb_input,
+                slice_manufacturing=bool(payload.get("slice_manufacturing", False)),
+                blender_preview=bool(payload.get("blender_preview", False)),
+                print_configuration=print_configuration,
+            )
         response = result.to_dict()
         response["run_id"] = output_dir.name
         response["downloads"] = [

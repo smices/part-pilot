@@ -2,6 +2,10 @@ const state = { files: [], vision: null, busy: false, step: 1 };
 
 const elements = {
   request: document.querySelector("#request"),
+  pcbMode: document.querySelector("#pcbMode"),
+  pcbFields: document.querySelector("#pcbFields"),
+  pcbInput: document.querySelector("#pcbInput"),
+  printConfiguration: document.querySelector("#printConfiguration"),
   planner: document.querySelector("#planner"),
   model: document.querySelector("#model"),
   sourceKind: document.querySelector("#sourceKind"),
@@ -1949,6 +1953,32 @@ async function recognize() {
 }
 
 async function design() {
+  if (elements.pcbMode.checked) {
+    let pcbInput;
+    let printConfiguration;
+    try {
+      pcbInput = JSON.parse(elements.pcbInput.value);
+      printConfiguration = elements.printConfiguration.value.trim()
+        ? JSON.parse(elements.printConfiguration.value)
+        : undefined;
+    } catch {
+      showError(new Error("PCB 输入和打印配置必须是有效 JSON。"));
+      return;
+    }
+    setBusy("design");
+    try {
+      const result = await api("/api/pcb", {
+        pcb_input: pcbInput,
+        print_configuration: printConfiguration,
+        slice_manufacturing: elements.sliceManufacturing.checked,
+        blender_preview: elements.blenderPreview.checked,
+      });
+      showResult(result);
+    } catch (error) {
+      showError(error);
+    }
+    return;
+  }
   if (!elements.request.value.trim()) {
     showError(new Error("请先填写工程需求。"));
     return;
@@ -2002,6 +2032,11 @@ elements.dropzone.addEventListener("drop", (event) => addFiles(event.dataTransfe
 elements.planner.addEventListener("change", () => {
   if (elements.planner.value === "rules") state.vision = null;
   renderPreviews();
+});
+elements.pcbMode.addEventListener("change", () => {
+  elements.pcbFields.hidden = !elements.pcbMode.checked;
+  elements.request.disabled = elements.pcbMode.checked;
+  elements.visionButton.disabled = elements.pcbMode.checked || !state.files.length;
 });
 elements.visionButton.addEventListener("click", recognize);
 elements.designButton.addEventListener("click", design);

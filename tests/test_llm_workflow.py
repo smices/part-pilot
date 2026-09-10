@@ -147,6 +147,47 @@ def test_gui_design_passes_requested_blender_preview(
     assert response["preview"]["visual"]["status"] == "passed"
 
 
+def test_gui_pcb_passes_measured_input_and_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    class Result:
+        exported_files: list[str] = []
+
+        @staticmethod
+        def to_dict():
+            return {"evidence": {"input": {"status": "passed"}}}
+
+    class Workflow:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def run_pcb(self, pcb_input, **kwargs):
+            captured["pcb_input"] = pcb_input
+            captured.update(kwargs)
+            return Result()
+
+    monkeypatch.setattr(gui_server, "IndustrialDesignWorkflow", Workflow)
+    handler = object.__new__(AICADRequestHandler)
+    handler.export_root = tmp_path
+    response = handler._pcb(
+        {
+            "pcb_input": {"length": {"value": 60}},
+            "slice_manufacturing": True,
+            "blender_preview": True,
+            "print_configuration": {"confirmed": True},
+        }
+    )
+
+    assert response["evidence"]["input"]["status"] == "passed"
+    assert captured["pcb_input"]["length"]["value"] == 60
+    assert captured["slice_manufacturing"] is True
+    assert captured["blender_preview"] is True
+    assert captured["print_configuration"] == {"confirmed": True}
+
+
 class FakeVisionProvider(DesignLLMProvider):
     name = "fake-vision"
 

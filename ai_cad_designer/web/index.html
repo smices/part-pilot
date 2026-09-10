@@ -64,6 +64,13 @@
 设计一个桌面机器人外壳。
 要求：不用螺丝、可拆卸、3D打印、PETG材料。</textarea>
 
+        <label class="check-row"><input id="pcbMode" type="checkbox"> 实测 PCB 可拆卸外壳模式</label>
+        <fieldset id="pcbFields" class="engineering-fields" hidden>
+          <legend>PCB 实测输入（单位必须为 mm）</legend>
+          <textarea id="pcbInput" rows="10" spellcheck="false" placeholder='粘贴 PCB JSON：每个尺寸都要有 value、unit、source、confirmed；未确认值可生成草稿，但不会通过制造验证。'></textarea>
+          <textarea id="printConfiguration" rows="5" spellcheck="false" placeholder='可选：实际切片配置 JSON。当前仅支持已确认的 Bambu Lab P1P 0.4 mm / Generic PETG 参考配置。'></textarea>
+        </fieldset>
+
         <div class="settings">
           <div>
             <label for="planner">推理引擎</label>
