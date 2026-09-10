@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import re
@@ -28,6 +29,60 @@ REFERENCE_FILAMENT = "Generic PETG @BBL P1P"
 
 class OrcaSlicerError(RuntimeError):
     """Raised when a profile cannot be resolved or a slice cannot complete."""
+
+
+class PrintConfigurationError(OrcaSlicerError):
+    """Raised when a requested printer cannot use the bundled reference profile."""
+
+
+def reference_print_configuration(
+    configuration: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Require an explicit, confirmed match before using the fixed profile."""
+
+    if not isinstance(configuration, dict):
+        raise PrintConfigurationError(
+            "PCB slicing requires a print configuration JSON object."
+        )
+    expected = {
+        "machine": REFERENCE_MACHINE,
+        "nozzle_diameter_mm": 0.4,
+        "process": REFERENCE_PROCESS,
+        "filament": REFERENCE_FILAMENT,
+    }
+    missing = [name for name in expected if not configuration.get(name)]
+    if missing:
+        raise PrintConfigurationError(
+            "PCB print configuration is missing: " + ", ".join(missing)
+        )
+    if configuration.get("confirmed") is not True:
+        raise PrintConfigurationError(
+            "PCB print configuration must set confirmed to true."
+        )
+    mismatched = [
+        name
+        for name, value in expected.items()
+        if configuration.get(name) != value
+    ]
+    if mismatched:
+        raise PrintConfigurationError(
+            "PCB print configuration does not match the available reference "
+            "profile: " + ", ".join(mismatched)
+        )
+    return {**expected, "confirmed": True, "reference_match": True}
+
+
+def stl_model_evidence(stl_paths: list[str | Path]) -> list[dict[str, str]]:
+    """Return immutable source identities for manufacturing reports."""
+
+    records = []
+    for value in stl_paths:
+        path = Path(value).expanduser().resolve()
+        if not path.is_file():
+            raise OrcaSlicerError(f"STL model not found: {path}")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        records.append({"file_name": path.name, "model_sha256": digest})
+    return records
 
 
 def _support_removal_access_stats(
@@ -482,6 +537,7 @@ class OrcaSlicerRunner:
         stl_paths: list[str | Path],
         output_dir: str | Path,
         *,
+        print_configuration: dict[str, Any] | None = None,
         rotations: dict[str, tuple[float, float, float]] | None = None,
         support_strategy: str = "minimal",
         analyze_support_impact: bool = True,
@@ -596,6 +652,18 @@ class OrcaSlicerRunner:
         payload = {
             "passed": all(item.printable for item in results),
             "slicer": "OrcaSlicer 2.4.2",
+            "print_configuration": (
+                print_configuration
+                if print_configuration is not None
+                else {
+                    "machine": REFERENCE_MACHINE,
+                    "process": REFERENCE_PROCESS,
+                    "filament": REFERENCE_FILAMENT,
+                    "confirmed": False,
+                    "reference_match": True,
+                }
+            ),
+            "input_models": stl_model_evidence(stl_paths),
             "reference_profile": {
                 "machine": REFERENCE_MACHINE,
                 "process": REFERENCE_PROCESS,

@@ -114,6 +114,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--request", help="custom Chinese or English design request")
     parser.add_argument("--pcb-input", metavar="JSON", help="measured PCB mechanical input JSON")
     parser.add_argument(
+        "--print-configuration",
+        metavar="JSON",
+        help=(
+            "confirmed printer JSON for PCB --slice: machine, nozzle_diameter_mm, process, "
+            "filament, and confirmed=true"
+        ),
+    )
+    parser.add_argument(
         "--planner",
         choices=("codex", "api", "rules"),
         default=os.getenv("AI_CAD_PLANNER", "codex"),
@@ -251,7 +259,15 @@ def main() -> int:
             )
         )
         if args.workflow == "pcb":
-            result = workflow.run_pcb(_read_json_object(args.pcb_input, "pcb input"), blender_preview=args.blender_preview, slice_manufacturing=args.slice)
+            result = workflow.run_pcb(
+                _read_json_object(args.pcb_input, "pcb input"),
+                blender_preview=args.blender_preview,
+                slice_manufacturing=args.slice,
+                print_configuration=_read_json_object(
+                    args.print_configuration,
+                    "print configuration",
+                ),
+            )
         else:
             result = workflow.run(
             request,

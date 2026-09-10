@@ -35,7 +35,13 @@ from .orca_project import (
 )
 from .schema import ComponentSpec, DesignBrief, DesignProposal, Evidence, MATERIALS, PartPlan, WorkflowResult
 from .pcb_input import PCBMechanicalInput
-from .slicing import OrcaSlicerError, OrcaSlicerRunner
+from .slicing import (
+    OrcaSlicerError,
+    OrcaSlicerRunner,
+    PrintConfigurationError,
+    reference_print_configuration,
+    stl_model_evidence,
+)
 from .support_modifiers import create_support_modifier_parts
 from .validation import validate_assembly_interference
 
@@ -142,6 +148,7 @@ class IndustrialDesignWorkflow:
         self,
         status: str,
         message: str,
+        **details: Any,
     ) -> dict[str, Any]:
         report_path = self.output_dir / "slicing_diagnostic.json"
         report = {
@@ -150,6 +157,7 @@ class IndustrialDesignWorkflow:
             "diagnostic": message,
             "parts": {},
             "report_path": str(report_path.resolve()),
+            **details,
         }
         report_path.write_text(
             json.dumps(report, indent=2, ensure_ascii=False),
@@ -366,6 +374,7 @@ class IndustrialDesignWorkflow:
         *,
         blender_preview: bool = False,
         slice_manufacturing: bool = False,
+        print_configuration: dict[str, Any] | None = None,
     ) -> WorkflowResult:
         """Generate a traceable removable enclosure from measured PCB input."""
         pcb = PCBMechanicalInput.from_payload(pcb_payload)
@@ -382,7 +391,16 @@ class IndustrialDesignWorkflow:
         )
         parts = list(self.joint_agent.pcb_two_piece_enclosure(pcb))
         assembly = self.assembly_agent.pcb_enclosure(parts[0], parts[1])
-        result = self._manufacture(proposal, parts, "pcb_enclosure", assembly, vision=None, slice_manufacturing=slice_manufacturing, blender_preview=blender_preview)
+        result = self._manufacture(
+            proposal,
+            parts,
+            "pcb_enclosure",
+            assembly,
+            vision=None,
+            slice_manufacturing=slice_manufacturing,
+            blender_preview=blender_preview,
+            print_configuration=print_configuration,
+        )
         pending = pcb.pending_confirmation()
         result.evidence["input"] = Evidence(
             "passed" if not pending else "blocked",
@@ -687,6 +705,7 @@ class IndustrialDesignWorkflow:
         vision: dict[str, Any] | None,
         slice_manufacturing: bool,
         blender_preview: bool,
+        print_configuration: dict[str, Any] | None = None,
     ):
         files: list[str] = []
         stl_paths: list[Path] = []
@@ -842,6 +861,34 @@ class IndustrialDesignWorkflow:
                     "blocked",
                     "Real OrcaSlicer workflow currently supports PETG only.",
                 )
+            elif proposal.brief.design_family == "pcb_enclosure":
+                try:
+                    configuration = reference_print_configuration(
+                        print_configuration
+                    )
+                except PrintConfigurationError as exc:
+                    manufacturing = self._slicing_diagnostic(
+                        "blocked",
+                        str(exc),
+                        print_configuration=print_configuration or {},
+                        input_models=stl_model_evidence(stl_paths),
+                    )
+                else:
+                    try:
+                        manufacturing = OrcaSlicerRunner().slice_parts(
+                            stl_paths,
+                            self.output_dir,
+                            print_configuration=configuration,
+                            rotations={},
+                            support_strategy=proposal.support_strategy,
+                        )
+                    except OrcaSlicerError as exc:
+                        manufacturing = self._slicing_diagnostic(
+                            "failed",
+                            str(exc),
+                            print_configuration=configuration,
+                            input_models=stl_model_evidence(stl_paths),
+                        )
             else:
                 try:
                     manufacturing = OrcaSlicerRunner().slice_parts(

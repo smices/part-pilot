@@ -1,0 +1,7 @@
+{
+  "machine": "Bambu Lab P1P 0.4 nozzle",
+  "nozzle_diameter_mm": 0.4,
+  "process": "0.20mm Standard @BBL P1P",
+  "filament": "Generic PETG @BBL P1P",
+  "confirmed": true
+}

@@ -2,6 +2,14 @@ import pytest
 
 from ai_cad_designer.agents.joint_agent import JointAgent
 from ai_cad_designer.pcb_input import PCBMechanicalInput
+from ai_cad_designer.slicing import (
+    PrintConfigurationError,
+    REFERENCE_FILAMENT,
+    REFERENCE_MACHINE,
+    REFERENCE_PROCESS,
+    reference_print_configuration,
+    stl_model_evidence,
+)
 from ai_cad_designer.validation import validate_printability
 from ai_cad_designer.workflow import IndustrialDesignWorkflow
 
@@ -97,3 +105,50 @@ def test_pcb_workflow_forwards_slice_request(tmp_path, monkeypatch):
     monkeypatch.setattr(IndustrialDesignWorkflow, "_manufacture", fake_manufacture)
     assert isinstance(IndustrialDesignWorkflow(tmp_path).run_pcb(payload(), slice_manufacturing=True), Result)
     assert captured["slice_manufacturing"] is True
+
+
+def test_pcb_slice_requires_confirmed_matching_print_configuration(tmp_path):
+    result = IndustrialDesignWorkflow(tmp_path).run_pcb(
+        payload(), slice_manufacturing=True
+    )
+    manufacturing = result.manufacturing
+    assert manufacturing["status"] == "blocked"
+    assert "print configuration" in manufacturing["diagnostic"]
+    assert len(manufacturing["input_models"]) == 2
+    assert all(item["model_sha256"] for item in manufacturing["input_models"])
+    assert not result.manufacturable
+
+
+def test_reference_print_configuration_and_model_hashes(tmp_path):
+    with pytest.raises(PrintConfigurationError, match="confirmed"):
+        reference_print_configuration(
+            {
+                "machine": REFERENCE_MACHINE,
+                "nozzle_diameter_mm": 0.4,
+                "process": REFERENCE_PROCESS,
+                "filament": REFERENCE_FILAMENT,
+            }
+        )
+    with pytest.raises(PrintConfigurationError, match="nozzle_diameter_mm"):
+        reference_print_configuration(
+            {
+                "machine": REFERENCE_MACHINE,
+                "nozzle_diameter_mm": 0.6,
+                "process": REFERENCE_PROCESS,
+                "filament": REFERENCE_FILAMENT,
+                "confirmed": True,
+            }
+        )
+    configuration = reference_print_configuration(
+        {
+            "machine": REFERENCE_MACHINE,
+            "nozzle_diameter_mm": 0.4,
+            "process": REFERENCE_PROCESS,
+            "filament": REFERENCE_FILAMENT,
+            "confirmed": True,
+        }
+    )
+    model = tmp_path / "part.stl"
+    model.write_bytes(b"solid part\nendsolid part\n")
+    assert configuration["reference_match"] is True
+    assert stl_model_evidence([model]) == stl_model_evidence([model])
