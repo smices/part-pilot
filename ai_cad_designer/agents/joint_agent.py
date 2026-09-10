@@ -8,6 +8,7 @@ import cadquery as cq
 
 from ai_cad_designer.core import CADPart, create_part, generate_joint
 from ai_cad_designer.hardware_specs import SMART_FAN_DEFAULT_ENVELOPES_MM
+from ai_cad_designer.pcb_input import PCBMechanicalInput
 
 
 def _rounded_box(
@@ -34,6 +35,49 @@ class JointAgent:
 
     def reference_joint(self, joint_type: str, tolerance_mm: float = 0.25):
         return generate_joint(joint_type, tolerance_mm=tolerance_mm)
+
+    def pcb_two_piece_enclosure(
+        self,
+        pcb: PCBMechanicalInput,
+        *,
+        wall_mm: float = 2.0,
+        tolerance_mm: float = 0.25,
+        material: str = "PETG",
+    ) -> tuple[CADPart, CADPart]:
+        """Create a removable enclosure whose posts and ports follow PCB input."""
+        clearance = tolerance_mm + 0.5
+        length = pcb.length.value + 2 * (wall_mm + clearance)
+        width = pcb.width.value + 2 * (wall_mm + clearance)
+        base_height = wall_mm + pcb.thickness.value + pcb.max_component_height.value + 3.0
+        base, lid = self.two_piece_snap_enclosure(
+            length_mm=length, width_mm=width, base_height_mm=base_height,
+            wall_mm=wall_mm, lid_height_mm=wall_mm + 6.0,
+            tolerance_mm=tolerance_mm, material=material,
+        )
+        shape = base.shape
+        for hole in pcb.mounting_holes:
+            x = hole.x.value - pcb.length.value / 2
+            y = hole.y.value - pcb.width.value / 2
+            pin_radius = max(0.4, hole.diameter.value / 2 - tolerance_mm)
+            pin = cq.Workplane("XY").center(x, y).circle(pin_radius).extrude(wall_mm + pcb.thickness.value)
+            shape = shape.union(pin)
+        for port in pcb.interfaces:
+            z = wall_mm + pcb.thickness.value + port.height.value / 2
+            if port.face in {"front", "rear"}:
+                x = port.x.value - pcb.length.value / 2
+                y = (-1 if port.face == "front" else 1) * width / 2
+                cut = cq.Workplane("XY").box(port.width.value + 2 * tolerance_mm, wall_mm + 2, port.height.value + 2 * tolerance_mm, centered=(True, True, True)).translate((x, y, z))
+            else:
+                x = (-1 if port.face == "left" else 1) * length / 2
+                y = port.y.value - pcb.width.value / 2
+                cut = cq.Workplane("XY").box(wall_mm + 2, port.width.value + 2 * tolerance_mm, port.height.value + 2 * tolerance_mm, centered=(True, True, True)).translate((x, y, z))
+            shape = shape.cut(cut)
+        base.name = "pcb_base"
+        lid.name = "pcb_lid"
+        base.shape = shape
+        base.metadata.update({"pcb_input": {"length_mm": pcb.length.value, "width_mm": pcb.width.value, "hole_count": len(pcb.mounting_holes), "interface_count": len(pcb.interfaces)}, "dimensions_mm": (length, width, base_height), "joint": "snap-fit PCB enclosure"})
+        lid.metadata["pcb_input"] = base.metadata["pcb_input"]
+        return base, lid
 
     def mac_mini_m4_fit_reference(
         self,
