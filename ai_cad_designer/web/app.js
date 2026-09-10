@@ -194,6 +194,7 @@ const SMART_FAN_DEMO = {
 };
 
 const CAD_PROFILE_KEY = "forge.aiCadProfile.v1";
+const ACTIVE_JOB_KEY = "forge.activeCadJob.v1";
 
 function parameterInput(name) {
   return document.querySelector(`[data-engineering-parameter="${name}"]`);
@@ -550,6 +551,7 @@ function setBusy(mode) {
 function showError(error) {
   state.busy = false;
   state.jobId = null;
+  sessionStorage.removeItem(ACTIVE_JOB_KEY);
   elements.progressState.hidden = true;
   elements.resultState.hidden = !state.vision;
   elements.emptyState.hidden = Boolean(state.vision);
@@ -1916,6 +1918,7 @@ function renderModels(downloads, preview) {
 function showResult(result, visionOnly = false) {
   state.busy = false;
   state.jobId = null;
+  sessionStorage.removeItem(ACTIVE_JOB_KEY);
   elements.emptyState.hidden = true;
   elements.progressState.hidden = true;
   elements.resultState.hidden = false;
@@ -2011,6 +2014,12 @@ const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, mil
 async function runJob(endpoint, payload) {
   const job = await api(endpoint, payload);
   state.jobId = job.job_id;
+  sessionStorage.setItem(ACTIVE_JOB_KEY, state.jobId);
+  return pollJob();
+}
+
+async function pollJob() {
+  if (!state.jobId) throw new Error("没有活动任务。");
   while (true) {
     const response = await fetch(`/api/jobs/${encodeURIComponent(state.jobId)}`);
     const current = await response.json();
@@ -2145,3 +2154,9 @@ elements.modelTabs.addEventListener("keydown", (event) => {
 
 renderPreviews();
 checkStatus();
+const savedJob = sessionStorage.getItem(ACTIVE_JOB_KEY);
+if (savedJob) {
+  state.jobId = savedJob;
+  setBusy("design");
+  void pollJob().then((result) => showResult(result)).catch(showError);
+}
