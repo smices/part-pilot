@@ -21,6 +21,14 @@ class AssemblyAgent:
             [base, (lid, lid_location)],
         )
 
+    def pcb_enclosure(self, base: CADPart, lid: CADPart) -> CADAssembly:
+        base_height = float(base.metadata["dimensions_mm"][2])
+        lid_wall = float(lid.metadata["wall_thickness_mm"])
+        return create_assembly(
+            "pcb_enclosure",
+            [base, (lid, cq.Location(cq.Vector(0, 0, base_height + 2 * lid_wall), cq.Vector(1, 0, 0), 180.0))],
+        )
+
     def desktop_robot(self, parts: list[CADPart]) -> CADAssembly:
         by_name = {part.name: part for part in parts}
         body_length, body_width, body_height = by_name["body"].metadata[

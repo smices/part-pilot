@@ -108,10 +108,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "workflow",
-        choices=("sensor", "robot", "design", "vision", "status"),
+        choices=("sensor", "robot", "pcb", "design", "vision", "status"),
         help="design workflow, visual-source recognition, or provider status",
     )
     parser.add_argument("--request", help="custom Chinese or English design request")
+    parser.add_argument("--pcb-input", metavar="JSON", help="measured PCB mechanical input JSON")
     parser.add_argument(
         "--planner",
         choices=("codex", "api", "rules"),
@@ -195,6 +196,8 @@ def main() -> int:
         request = request or DEFAULT_ROBOT_REQUEST
     elif args.workflow == "vision":
         request = request or "Identify hardware for a printable enclosure"
+    elif args.workflow == "pcb":
+        request = request or "Measured PCB removable enclosure"
     elif not request:
         raise SystemExit("--request is required for the design workflow")
 
@@ -247,14 +250,17 @@ def main() -> int:
                 "manufacturing parameters",
             )
         )
-        result = workflow.run(
+        if args.workflow == "pcb":
+            result = workflow.run_pcb(_read_json_object(args.pcb_input, "pcb input"), blender_preview=args.blender_preview)
+        else:
+            result = workflow.run(
             request,
             image_paths=args.image,
             slice_manufacturing=args.slice,
             blender_preview=args.blender_preview,
             engineering_parameters=engineering_parameters or None,
             manufacturing_parameters=manufacturing_parameters or None,
-        )
+            )
     except (LLMPlanningError, ValueError) as exc:
         print(
             json.dumps(

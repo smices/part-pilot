@@ -33,7 +33,8 @@ from .orca_project import (
     create_support_enforcer_project,
     inspect_support_enforcer_project,
 )
-from .schema import ComponentSpec, Evidence, MATERIALS, WorkflowResult
+from .schema import ComponentSpec, DesignBrief, DesignProposal, Evidence, MATERIALS, PartPlan, WorkflowResult
+from .pcb_input import PCBMechanicalInput
 from .slicing import OrcaSlicerError, OrcaSlicerRunner
 from .support_modifiers import create_support_modifier_parts
 from .validation import validate_assembly_interference
@@ -358,6 +359,29 @@ class IndustrialDesignWorkflow:
             slice_manufacturing=slice_manufacturing,
             blender_preview=blender_preview,
         )
+
+    def run_pcb(
+        self,
+        pcb_payload: dict[str, Any],
+        *,
+        blender_preview: bool = False,
+    ) -> WorkflowResult:
+        """Generate a traceable removable enclosure from measured PCB input."""
+        pcb = PCBMechanicalInput.from_payload(pcb_payload)
+        brief = DesignBrief(
+            request="Measured PCB removable enclosure",
+            design_family="pcb_enclosure",
+            product="PCB enclosure",
+            components=(ComponentSpec("PCB", (pcb.length.value, pcb.width.value, pcb.thickness.value), "serviceable"),),
+        )
+        proposal = DesignProposal(
+            "Measured PCB enclosure", brief,
+            [PartPlan("pcb_base", "PCB carrier with locating pins and port openings", "snap_fit", (pcb.length.value, pcb.width.value, pcb.max_component_height.value)), PartPlan("pcb_lid", "Removable service cover", "snap_fit", (pcb.length.value, pcb.width.value, 6.0))],
+            engineering_notes=["PCB coordinates use lower-left origin; unconfirmed fields: " + ", ".join(pcb.pending_confirmation() or ["none"])],
+        )
+        parts = list(self.joint_agent.pcb_two_piece_enclosure(pcb))
+        assembly = self.assembly_agent.pcb_enclosure(parts[0], parts[1])
+        return self._manufacture(proposal, parts, "pcb_enclosure", assembly, vision=None, slice_manufacturing=False, blender_preview=blender_preview)
 
     @staticmethod
     def _reconcile_smart_fan_proposal_bom(proposal, parts: list[CADPart]) -> None:

@@ -3,6 +3,7 @@ import pytest
 from ai_cad_designer.agents.joint_agent import JointAgent
 from ai_cad_designer.pcb_input import PCBMechanicalInput
 from ai_cad_designer.validation import validate_printability
+from ai_cad_designer.workflow import IndustrialDesignWorkflow
 
 
 def measure(value, confirmed=True, source="user_measurement"):
@@ -41,3 +42,11 @@ def test_pcb_dimensions_holes_and_ports_change_generated_enclosure():
     assert validate_printability(first_base)["printable"]
     assert validate_printability(first_lid)["printable"]
     assert first_base.solid().Volume() != second_base.solid().Volume()
+
+
+def test_pcb_workflow_exports_two_piece_enclosure(tmp_path):
+    result = IndustrialDesignWorkflow(tmp_path).run_pcb(payload())
+    assert result.passed
+    assert (tmp_path / "pcb_base.step").is_file()
+    assert (tmp_path / "pcb_lid.stl").is_file()
+    assert result.preview["visual"]["status"] == "not_run"
