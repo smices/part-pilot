@@ -1,4 +1,4 @@
-const state = { files: [], vision: null, busy: false, step: 1 };
+const state = { files: [], vision: null, busy: false, step: 1, jobId: null };
 
 const elements = {
   request: document.querySelector("#request"),
@@ -36,6 +36,7 @@ const elements = {
   imageCount: document.querySelector("#imageCount"),
   visionButton: document.querySelector("#visionButton"),
   designButton: document.querySelector("#designButton"),
+  cancelJob: document.querySelector("#cancelJob"),
   errorBox: document.querySelector("#errorBox"),
   statusDot: document.querySelector("#statusDot"),
   statusText: document.querySelector("#statusText"),
@@ -539,6 +540,7 @@ function setBusy(mode) {
   elements.runState.textContent = mode ? "运行中" : "等待任务";
   elements.runState.className = `run-state ${mode ? "running" : "idle"}`;
   elements.designButton.disabled = Boolean(mode);
+  elements.cancelJob.hidden = !mode || mode === "vision";
   if (mode === "vision") setWizardStep(2);
   if (mode === "design") setWizardStep(4);
   renderPreviews();
@@ -547,14 +549,17 @@ function setBusy(mode) {
 
 function showError(error) {
   state.busy = false;
+  state.jobId = null;
   elements.progressState.hidden = true;
   elements.resultState.hidden = !state.vision;
   elements.emptyState.hidden = Boolean(state.vision);
-  elements.runState.textContent = "任务失败";
-  elements.runState.className = "run-state failed";
+  elements.runState.textContent = error.cancelled ? "任务已取消" : "任务失败";
+  elements.runState.className = `run-state ${error.cancelled ? "idle" : "failed"}`;
   elements.errorBox.textContent = error.message || String(error);
   elements.errorBox.hidden = false;
   elements.designButton.disabled = false;
+  elements.cancelJob.hidden = true;
+  elements.cancelJob.hidden = true;
   setWizardStep(state.vision ? 3 : Math.min(state.step, 2));
   renderPreviews();
 }
@@ -1910,11 +1915,13 @@ function renderModels(downloads, preview) {
 
 function showResult(result, visionOnly = false) {
   state.busy = false;
+  state.jobId = null;
   elements.emptyState.hidden = true;
   elements.progressState.hidden = true;
   elements.resultState.hidden = false;
   elements.runState.textContent = visionOnly ? "识别完成" : "生成完成";
   elements.runState.className = "run-state done";
+  elements.cancelJob.hidden = true;
   renderVision(visionOnly ? result : result.vision || state.vision);
   if (!visionOnly) {
     renderProposal(result.proposal);
@@ -1967,7 +1974,7 @@ async function design() {
     }
     setBusy("design");
     try {
-      const result = await api("/api/pcb", {
+      const result = await runJob("/api/jobs/pcb", {
         pcb_input: pcbInput,
         print_configuration: printConfiguration,
         slice_manufacturing: elements.sliceManufacturing.checked,
@@ -1987,13 +1994,44 @@ async function design() {
     showError(new Error("请先执行“识别资料”，确认组件尺寸后再生成 CAD。"));
     return;
   }
-  setBusy("design");
+    setBusy("design");
   try {
     const payload = requestPayload();
     if (state.vision) payload.vision_report = state.vision;
     else if (state.files.length) payload.images = await imagePayload();
-    const result = await api("/api/design", payload);
+    const result = await runJob("/api/jobs/design", payload);
     showResult(result);
+  } catch (error) {
+    showError(error);
+  }
+}
+
+const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function runJob(endpoint, payload) {
+  const job = await api(endpoint, payload);
+  state.jobId = job.job_id;
+  while (true) {
+    const response = await fetch(`/api/jobs/${encodeURIComponent(state.jobId)}`);
+    const current = await response.json();
+    if (!response.ok) throw new Error(current.error || "无法读取任务状态");
+    if (current.status === "succeeded") return current.result;
+    if (current.status === "cancelled") {
+      const error = new Error("任务已取消；不完整产物未标记为成功。");
+      error.cancelled = true;
+      throw error;
+    }
+    if (current.status === "failed") throw new Error(current.error || "任务失败");
+    elements.runState.textContent = current.status === "queued" ? "排队中" : "运行中";
+    await delay(500);
+  }
+}
+
+async function cancelJob() {
+  if (!state.jobId) return;
+  try {
+    const result = await api(`/api/jobs/${encodeURIComponent(state.jobId)}/cancel`, {});
+    elements.runState.textContent = result.status === "cancel_requested" ? "取消待当前步骤结束" : "任务已取消";
   } catch (error) {
     showError(error);
   }
@@ -2040,6 +2078,7 @@ elements.pcbMode.addEventListener("change", () => {
 });
 elements.visionButton.addEventListener("click", recognize);
 elements.designButton.addEventListener("click", design);
+elements.cancelJob.addEventListener("click", () => void cancelJob());
 elements.analyzeConstraints.addEventListener("click", analyzeConstraints);
 elements.loadDemo.addEventListener("click", loadSmartFanDemo);
 document.querySelectorAll("[data-engineering-parameter]").forEach((input) => {
