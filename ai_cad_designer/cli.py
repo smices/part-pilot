@@ -10,6 +10,8 @@ from pathlib import Path
 from .llm import LLMPlanningError, build_provider
 from .validation import validate_pythonocc_bridge
 from .workflow import IndustrialDesignWorkflow
+from .physical_evidence import record_physical_evidence
+from .slicing import stl_model_evidence
 
 
 DEFAULT_SENSOR_REQUEST = "Design a portable sensor enclosure"
@@ -108,11 +110,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "workflow",
-        choices=("sensor", "robot", "pcb", "design", "vision", "status"),
+        choices=("sensor", "robot", "pcb", "design", "vision", "status", "physical"),
         help="design workflow, visual-source recognition, or provider status",
     )
     parser.add_argument("--request", help="custom Chinese or English design request")
     parser.add_argument("--pcb-input", metavar="JSON", help="measured PCB mechanical input JSON")
+    parser.add_argument("--physical-evidence", metavar="JSON", help="physical print and assembly evidence for an existing output directory")
     parser.add_argument(
         "--print-configuration",
         metavar="JSON",
@@ -196,6 +199,21 @@ def main() -> int:
         )
         print(json.dumps(payload, indent=2, ensure_ascii=False))
         return 0 if payload["available"] else 1
+
+    if args.workflow == "physical":
+        try:
+            output_dir = Path(args.output).resolve()
+            models = stl_model_evidence(list(output_dir.glob("*.stl")))
+            result = record_physical_evidence(
+                output_dir,
+                models,
+                _read_json_object(args.physical_evidence, "physical evidence"),
+            )
+        except (ValueError, OSError) as exc:
+            print(json.dumps({"passed": False, "error": str(exc)}, ensure_ascii=False, indent=2))
+            return 2
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["status"] == "passed" else 1
 
     request = args.request
     if args.workflow == "sensor":
