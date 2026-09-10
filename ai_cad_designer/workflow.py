@@ -35,6 +35,7 @@ from .orca_project import (
 )
 from .schema import ComponentSpec, DesignBrief, DesignProposal, Evidence, MATERIALS, PartPlan, WorkflowResult
 from .pcb_input import PCBMechanicalInput
+from .repair import RepairIssue, run_bounded_repair
 from .slicing import (
     OrcaSlicerError,
     OrcaSlicerRunner,
@@ -375,6 +376,7 @@ class IndustrialDesignWorkflow:
         blender_preview: bool = False,
         slice_manufacturing: bool = False,
         print_configuration: dict[str, Any] | None = None,
+        wall_mm: float = 2.0,
     ) -> WorkflowResult:
         """Generate a traceable removable enclosure from measured PCB input."""
         pcb = PCBMechanicalInput.from_payload(pcb_payload)
@@ -389,7 +391,9 @@ class IndustrialDesignWorkflow:
             [PartPlan("pcb_base", "PCB carrier with locating pins and port openings", "snap_fit", (pcb.length.value, pcb.width.value, pcb.max_component_height.value)), PartPlan("pcb_lid", "Removable service cover", "snap_fit", (pcb.length.value, pcb.width.value, 6.0))],
             engineering_notes=["PCB coordinates use lower-left origin; unconfirmed fields: " + ", ".join(pcb.pending_confirmation() or ["none"])],
         )
-        parts = list(self.joint_agent.pcb_two_piece_enclosure(pcb))
+        if not 0.4 <= wall_mm <= 8.0:
+            raise ValueError("PCB wall_mm must be between 0.4 and 8")
+        parts = list(self.joint_agent.pcb_two_piece_enclosure(pcb, wall_mm=wall_mm))
         assembly = self.assembly_agent.pcb_enclosure(parts[0], parts[1])
         result = self._manufacture(
             proposal,
@@ -410,6 +414,58 @@ class IndustrialDesignWorkflow:
         report_path = self.output_dir / "validation_report.json"
         report_path.write_text(json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
         return result
+
+    @staticmethod
+    def _pcb_repair_issues(result: WorkflowResult) -> tuple[RepairIssue, ...]:
+        issues: list[RepairIssue] = []
+        for name, report in result.validation.items():
+            if report.get("fdm", {}).get("wall_ok") is False:
+                issues.append(RepairIssue("wall_too_thin", f"{name} wall is below the nozzle limit", ("wall_mm",), {"part": name}))
+            elif report.get("printable") is False:
+                issues.append(RepairIssue("geometry_validation_failed", f"{name} did not pass geometry validation", evidence={"part": name}))
+        input_evidence = result.evidence_records().get("input")
+        if input_evidence and input_evidence.status != "passed":
+            issues.append(RepairIssue("measurement_confirmation_required", input_evidence.summary))
+        if result.manufacturing and result.manufacturing.get("status") != "passed":
+            issues.append(RepairIssue("slicing_not_passed", "Slicing must be resolved outside automatic geometry repair"))
+        return tuple(issues)
+
+    def repair_pcb(
+        self,
+        pcb_payload: dict[str, Any],
+        *,
+        wall_mm: float = 0.4,
+        max_iterations: int = 3,
+    ) -> WorkflowResult:
+        """Rebuild a PCB enclosure in isolated revisions for safe wall repair."""
+        attempts: list[tuple[dict[str, float], WorkflowResult]] = []
+
+        def run_attempt(parameters: dict[str, float]) -> tuple[RepairIssue, ...]:
+            directory = self.output_dir / "iterations" / f"iteration-{len(attempts)}"
+            result = IndustrialDesignWorkflow(directory).run_pcb(
+                pcb_payload, wall_mm=parameters["wall_mm"]
+            )
+            attempts.append((dict(parameters), result))
+            return self._pcb_repair_issues(result)
+
+        initial = {"wall_mm": float(wall_mm)}
+        initial_issues = run_attempt(initial)
+        repair = run_bounded_repair(
+            initial,
+            initial_issues,
+            allowed_ranges={"wall_mm": (0.4, 8.0)},
+            suggest=lambda issues, parameters: {"wall_mm": max(0.8, parameters["wall_mm"])},
+            evaluate=run_attempt,
+            max_iterations=max_iterations,
+        )
+        final = next(result for parameters, result in reversed(attempts) if parameters == repair.best_parameters)
+        manifest = {**repair.to_dict(), "attempts": [{"parameters": parameters, "output_dir": str(result.exported_files[0] and Path(result.exported_files[0]).parent)} for parameters, result in attempts]}
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        path = self.output_dir / "repair_manifest.json"
+        path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+        final.repair = {**manifest, "report_path": str(path.resolve())}
+        (Path(final.exported_files[0]).parent / "validation_report.json").write_text(json.dumps(final.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        return final
 
     @staticmethod
     def _reconcile_smart_fan_proposal_bom(proposal, parts: list[CADPart]) -> None:

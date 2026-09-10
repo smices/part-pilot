@@ -32,6 +32,22 @@ def test_bounded_repair_stops_for_hard_issue_without_changes():
     assert len(result.iterations) == 1
 
 
+def test_bounded_repair_does_not_change_parameters_when_a_hard_issue_is_mixed_in():
+    result = run_bounded_repair(
+        {"wall_mm": 0.4},
+        (
+            RepairIssue("wall_too_thin", "wall below nozzle limit", ("wall_mm",)),
+            RepairIssue("measurement_confirmation_required", "measure first"),
+        ),
+        allowed_ranges={"wall_mm": (0.4, 3.0)},
+        suggest=lambda issues, current: {"wall_mm": 0.8},
+        evaluate=lambda parameters: (),
+    )
+
+    assert result.stop_reason == "manual_measurement_or_hard_constraint"
+    assert result.best_parameters == {"wall_mm": 0.4}
+
+
 def test_bounded_repair_rejects_repeated_or_unapproved_suggestion():
     issue = RepairIssue("wall_too_thin", "wall below nozzle limit", ("wall_mm",))
     result = run_bounded_repair(

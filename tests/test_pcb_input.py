@@ -152,3 +152,15 @@ def test_reference_print_configuration_and_model_hashes(tmp_path):
     model.write_bytes(b"solid part\nendsolid part\n")
     assert configuration["reference_match"] is True
     assert stl_model_evidence([model]) == stl_model_evidence([model])
+
+
+def test_pcb_repair_rebuilds_wall_in_isolated_revision(tmp_path):
+    measured = payload()
+    measured["max_component_height"]["confirmed"] = True
+    result = IndustrialDesignWorkflow(tmp_path).repair_pcb(measured, wall_mm=0.4)
+
+    assert result.repair["status"] == "resolved"
+    assert result.repair["best_parameters"] == {"wall_mm": 0.8}
+    assert (tmp_path / "iterations" / "iteration-0" / "pcb_base.stl").is_file()
+    assert (tmp_path / "iterations" / "iteration-1" / "pcb_base.stl").is_file()
+    assert (tmp_path / "repair_manifest.json").is_file()

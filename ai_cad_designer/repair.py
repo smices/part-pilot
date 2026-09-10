@@ -76,9 +76,9 @@ def run_bounded_repair(
     for number in range(1, max_iterations + 1):
         if not issues:
             return RepairResult(tuple(history), dict(current), "resolved", "all_constraints_passed")
-        permitted = set().union(*(issue.reparable_parameters for issue in issues))
-        if not permitted:
+        if any(not issue.reparable_parameters for issue in issues):
             return RepairResult(tuple(history), best, "stopped", "manual_measurement_or_hard_constraint")
+        permitted = set().union(*(issue.reparable_parameters for issue in issues))
         try:
             change = {name: float(value) for name, value in suggest(issues, current).items()}
         except Exception:
